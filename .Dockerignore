@@ -1,0 +1,15 @@
+.git
+.gitignore
+.idea
+.pytest_cache
+.ruff_cache
+.venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+tests/
+docs/
+AGENTS.md
+app/envs/.env
+app/data/*.sqlite3

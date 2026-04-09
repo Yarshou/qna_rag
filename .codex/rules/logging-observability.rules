@@ -1,0 +1,27 @@
+ # Logging and Observability Rules
+
+Purpose:
+Ensure operational visibility without clutter or leakage.
+
+Rules:
+- Log major workflow steps that matter operationally:
+  - request receipt
+  - chat/message processing
+  - tool invocation
+  - retrieval result summary
+  - provider call success/failure
+  - persistence failures
+- Do not log secrets, tokens, raw credentials, or full sensitive payloads.
+- Prefer structured logging over ad hoc print statements.
+- Keep log messages concise and informative.
+- Log identifiers and counts rather than dumping full content where possible.
+- Use error logs for failures that need operator attention.
+- Use warning logs for degraded but recoverable paths.
+- Use info logs for lifecycle and major workflow checkpoints.
+- Do not add noisy debug logging broadly across the codebase.
+- If health or readiness endpoints are introduced, keep their behavior easy to diagnose.
+
+Expected behavior:
+- Operators can understand service flow and failures.
+- Logs remain safe, compact, and useful.
+- Observability supports debugging without leaking sensitive data.

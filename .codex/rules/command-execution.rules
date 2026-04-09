@@ -1,0 +1,23 @@
+# Command Execution Rules
+
+Purpose:
+Control shell command usage and prevent unsafe or low-signal execution patterns.
+
+Rules:
+- Run only commands relevant to the current task.
+- Prefer read-only inspection commands before write operations.
+- Prefer deterministic commands over interactive ones.
+- Never start long-running background processes that are not needed for the task.
+- Never leave servers, watchers, or tail processes running after inspection.
+- Avoid chained commands that hide the failing step.
+- Do not suppress command failures unless the task explicitly requires tolerant probing.
+- Prefer explicit working directories over implicit shell state.
+- Prefer targeted test commands over running the entire suite when only one area changed.
+- When modifying Python code, run the smallest relevant test set first, then broaden if needed.
+- When a command changes files, inspect the affected files afterward.
+- Do not use shell tricks that reduce readability or traceability.
+
+Expected behavior:
+- Commands should be easy to understand and easy to audit.
+- Failures should remain visible.
+- Execution should be proportional to the task.

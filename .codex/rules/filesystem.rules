@@ -1,0 +1,24 @@
+# Filesystem Rules
+
+Purpose:
+Constrain file operations to a predictable and reviewable subset of the repository.
+
+Rules:
+- Operate only inside the project workspace.
+- Do not create new top-level directories unless the task clearly requires them.
+- Prefer existing project structure over introducing new structural patterns.
+- Place new files in the most specific existing directory that matches their purpose.
+- Do not duplicate existing modules under slightly different names.
+- Do not create temporary files that remain in the repository after task completion.
+- Do not store generated runtime artifacts in source directories.
+- Keep test fixtures under tests/fixtures/.
+- Keep documentation under docs/ unless it belongs in README.md.
+- Keep automation or helper scripts under scripts/.
+- Keep knowledge-base test files under tests/fixtures/knowledge/.
+- Do not introduce hidden state files unless the task explicitly requires them.
+- If a file must be moved or renamed, update all affected imports and references in the same change.
+
+Expected behavior:
+- Respect the intended layout of the repository.
+- Avoid structural drift.
+- Keep all added files discoverable and logically placed.

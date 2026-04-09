@@ -1,0 +1,24 @@
+# Safety Rules
+
+Purpose:
+Prevent destructive, irreversible, or high-risk actions during repository work.
+
+Rules:
+- Never delete large groups of files or directories unless the task explicitly requires it.
+- Never run destructive shell commands such as recursive deletion, forced cleanup, or bulk overwrite without clear necessity.
+- Never modify or remove files outside the current repository workspace.
+- Never overwrite user-authored documentation, configuration, or source files wholesale if a minimal edit is possible.
+- Never rewrite a file from scratch when a localized change is sufficient.
+- Never edit secrets, tokens, or private credentials.
+- Never print secrets to terminal output, logs, or generated files.
+- Never disable tests, linters, or checks just to make a task pass.
+- Never remove failing tests unless the task explicitly requires replacing or rewriting them.
+- Never change lockfiles, dependency manifests, or Docker/runtime files unless the task requires it.
+- Never invent behavior that is not implemented.
+- Never silently ignore errors from commands, tests, migrations, or startup scripts.
+- If a risky change is required, minimize scope and keep the diff local and reversible.
+
+Expected behavior:
+- Prefer additive and local changes.
+- Prefer preserving existing code and refining it.
+- Preserve auditability of edits.

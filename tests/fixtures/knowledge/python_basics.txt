@@ -1,0 +1,3 @@
+Python uses indentation to define blocks.
+Functions are created with the def keyword.
+List comprehensions provide a compact way to transform lists.

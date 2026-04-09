@@ -1,0 +1,22 @@
+# Git Rules
+
+Purpose:
+Ensure repository changes remain focused, reviewable, and safe.
+
+Rules:
+- Never run git push.
+- Never rewrite git history.
+- Never use destructive git operations such as reset --hard, clean -fd, checkout -- on broad paths, or force-based history manipulation.
+- Never modify git configuration.
+- Never alter branches, remotes, or tags.
+- Never stage unrelated changes on purpose.
+- Do not revert user changes unless the task explicitly requires it.
+- Treat existing uncommitted changes as intentional unless clearly proven otherwise.
+- Keep changes scoped to the requested task.
+- Prefer small, coherent diffs over opportunistic refactors.
+- If a file is touched for behavior changes, update nearby tests and docs when needed.
+
+Expected behavior:
+- Produce changes suitable for code review.
+- Preserve user work.
+- Avoid repository-level side effects.

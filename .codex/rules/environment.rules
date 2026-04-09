@@ -1,0 +1,21 @@
+# Environment Rules
+
+Purpose:
+Control how runtime configuration is handled.
+
+Rules:
+- All runtime configuration must come from environment variables.
+- Never hardcode API keys, provider URLs, file paths that should be configurable, or deployment-specific values.
+- Do not commit real secrets.
+- Keep .env.example aligned with actual required settings.
+- If new configuration is introduced, document it in README.md or docs/.
+- Use safe defaults only for local development when appropriate.
+- Do not read configuration from scattered ad hoc locations.
+- Centralize environment parsing in the project configuration layer.
+- Validate required configuration early and fail clearly.
+- Keep provider-specific settings explicit, especially API base URL, API key, and model identifiers.
+
+Expected behavior:
+- Configuration stays portable.
+- Local, CI, and deployment environments remain predictable.
+- Secrets never enter source control.

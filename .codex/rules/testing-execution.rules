@@ -1,0 +1,21 @@
+# Testing Execution Rules
+
+Purpose:
+Define how Codex should run, update, and interpret tests.
+
+Rules:
+- Prefer running the smallest relevant test subset before broader test execution.
+- When behavior changes, update or add tests in the same change.
+- Do not delete tests to hide regressions.
+- Do not weaken assertions just to make tests pass.
+- Keep tests deterministic whenever possible.
+- Use integration tests for public API workflows.
+- Use focused unit tests for isolated internal logic.
+- Keep provider-dependent tests explicitly marked.
+- Do not require live external services for the default local test path unless the project explicitly intends that.
+- If a task touches retrieval, tool execution, or chat flow, run the corresponding targeted tests.
+- If tests fail, inspect the failure and fix the underlying issue rather than bypassing the test.
+
+Expected behavior:
+- Tests should validate behavior, not merely reflect implementation.
+- Test execution should be proportional, focused, and honest.
