@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from datetime import datetime
 from typing import Annotated
 
@@ -7,14 +8,15 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.domain import ChatEvent
-from app.events import EventBroker, get_event_broker
 from app.schemas.common import ErrorResponse
 from app.schemas.events import EventListResponse, EventResponse
 from app.services import ChatService, NotificationService
 
 router = APIRouter(tags=["events"])
 logger = logging.getLogger(__name__)
+SSE_POLL_INTERVAL_SECONDS = 0.5
 SSE_HEARTBEAT_INTERVAL_SECONDS = 15.0
+SSE_BATCH_SIZE = 100
 
 ERROR_RESPONSES = {
     404: {"model": ErrorResponse, "description": "Chat not found."},
@@ -26,14 +28,8 @@ def get_chat_service() -> ChatService:
     return ChatService()
 
 
-def get_event_broker_dependency(request: Request) -> EventBroker:
-    return getattr(request.app.state, "event_broker", None) or get_event_broker()
-
-
-def get_notification_service(
-    broker: Annotated[EventBroker, Depends(get_event_broker_dependency)],
-) -> NotificationService:
-    return NotificationService(broker=broker)
+def get_notification_service() -> NotificationService:
+    return NotificationService()
 
 
 def _event_to_response(event: ChatEvent) -> EventResponse:
@@ -55,29 +51,71 @@ def _format_sse_message(event: ChatEvent) -> str:
     return f"id: {event.id}\nevent: {event.event_type.value}\ndata: {data}\n\n"
 
 
-async def _event_stream(request: Request, chat_id: str, broker: EventBroker):
-    subscription = await broker.subscribe(chat_id)
-    logger.info("sse_subscribe", extra={"chat_id": chat_id})
+async def _resolve_stream_cursor(
+    *,
+    request: Request,
+    chat_id: str,
+    notification_service: NotificationService,
+) -> tuple[str | None, str | None]:
+    last_event_id = request.headers.get("last-event-id")
+    if last_event_id:
+        cursor_event = await notification_service.get_event(chat_id=chat_id, event_id=last_event_id)
+        if cursor_event is None:
+            logger.warning("sse_cursor_event_not_found", extra={"chat_id": chat_id, "last_event_id": last_event_id})
+            return None, None
+        return cursor_event.created_at.isoformat(), cursor_event.id
+
+    latest_event = await notification_service.get_latest_event(chat_id)
+    if latest_event is None:
+        return None, None
+    return latest_event.created_at.isoformat(), latest_event.id
+
+
+async def _event_stream(
+    *,
+    request: Request,
+    chat_id: str,
+    notification_service: NotificationService,
+    cursor_created_at: str | None,
+    cursor_id: str | None,
+):
+    last_delivery_at = time.monotonic()
+    logger.info("sse_subscribe", extra={"chat_id": chat_id, "cursor_id": cursor_id})
 
     try:
         while True:
             if await request.is_disconnected():
                 break
 
-            try:
-                event = await asyncio.wait_for(subscription.queue.get(), timeout=SSE_HEARTBEAT_INTERVAL_SECONDS)
-            except TimeoutError:
-                yield ": keepalive\n\n"
+            events = await notification_service.list_events_after(
+                chat_id=chat_id,
+                after_created_at=cursor_created_at,
+                after_id=cursor_id,
+                limit=SSE_BATCH_SIZE,
+            )
+
+            if events:
+                for event in events:
+                    if await request.is_disconnected():
+                        return
+
+                    logger.info(
+                        "sse_event_delivered",
+                        extra={"chat_id": chat_id, "event_id": event.id, "event_type": event.event_type.value},
+                    )
+                    yield _format_sse_message(event)
+                    cursor_created_at = event.created_at.isoformat()
+                    cursor_id = event.id
+                    last_delivery_at = time.monotonic()
                 continue
 
-            logger.info(
-                "sse_event_delivered",
-                extra={"chat_id": chat_id, "event_id": event.id, "event_type": event.event_type.value},
-            )
-            yield _format_sse_message(event)
+            if time.monotonic() - last_delivery_at >= SSE_HEARTBEAT_INTERVAL_SECONDS:
+                yield ": keepalive\n\n"
+                last_delivery_at = time.monotonic()
+
+            await asyncio.sleep(SSE_POLL_INTERVAL_SECONDS)
     finally:
-        await broker.unsubscribe(subscription)
-        logger.info("sse_disconnect", extra={"chat_id": chat_id})
+        logger.info("sse_disconnect", extra={"chat_id": chat_id, "cursor_id": cursor_id})
 
 
 @router.get(
@@ -118,17 +156,28 @@ async def stream_events(
     chat_id: str,
     request: Request,
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
-    broker: Annotated[EventBroker, Depends(get_event_broker_dependency)],
+    notification_service: Annotated[NotificationService, Depends(get_notification_service)],
 ) -> StreamingResponse | JSONResponse:
     try:
         chat = await chat_service.get_chat(chat_id)
         if chat is None:
             return _error_response(status.HTTP_404_NOT_FOUND, "chat_not_found", f"Chat '{chat_id}' was not found.")
+        cursor_created_at, cursor_id = await _resolve_stream_cursor(
+            request=request,
+            chat_id=chat_id,
+            notification_service=notification_service,
+        )
     except Exception:
         return _error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error", "Failed to open event stream.")
 
     return StreamingResponse(
-        _event_stream(request=request, chat_id=chat_id, broker=broker),
+        _event_stream(
+            request=request,
+            chat_id=chat_id,
+            notification_service=notification_service,
+            cursor_created_at=cursor_created_at,
+            cursor_id=cursor_id,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

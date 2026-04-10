@@ -10,7 +10,7 @@ WORKDIR /qna_rag
 
 RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}"
 
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml poetry.lock README.md ./
 RUN poetry install --only main --no-root
 
 

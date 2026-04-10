@@ -1,14 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 
 from app.domain import Message
-from app.events import get_event_broker
 from app.llm import InvalidToolArgumentsError, LLMClientConfigurationError, LLMProviderError, UnsupportedToolError
 from app.schemas.common import ErrorResponse
 from app.schemas.messages import MessageListResponse, MessageResponse, PostMessageRequest, PostMessageResponse
-from app.services import ChatNotFoundError, MessageProcessingError, MessageService, NotificationService
+from app.services import ChatNotFoundError, MessageProcessingError, MessageService
 
 router = APIRouter(tags=["messages"])
 
@@ -20,9 +19,8 @@ ERROR_RESPONSES = {
 }
 
 
-def get_message_service(request: Request) -> MessageService:
-    broker = getattr(request.app.state, "event_broker", None) or get_event_broker()
-    return MessageService(notification_service=NotificationService(broker=broker))
+def get_message_service() -> MessageService:
+    return MessageService()
 
 
 def _message_to_response(message: Message) -> MessageResponse:

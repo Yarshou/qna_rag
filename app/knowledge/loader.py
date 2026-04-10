@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 
@@ -75,7 +75,7 @@ class KnowledgeLoader:
     def _read_document(record: _KnowledgeFileRecord) -> KnowledgeDocument:
         content = record.absolute_path.read_text(encoding="utf-8")
         stat_result = record.absolute_path.stat()
-        updated_at = datetime.fromtimestamp(stat_result.st_mtime, tz=timezone.utc)
+        updated_at = datetime.fromtimestamp(stat_result.st_mtime, tz=UTC)
 
         return KnowledgeDocument(
             id=record.document_id,

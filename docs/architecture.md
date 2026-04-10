@@ -18,7 +18,7 @@ The architecture is intentionally explicit and constraint-driven. It is designed
 - mandatory tool/function calling for KB access
 - no more than 2 knowledge files in model context at once
 
-In addition to the core chat and RAG flow, the service exposes chat-processing lifecycle events. These events are persisted in SQLite and delivered to clients in real time through Server-Sent Events (SSE). For this assessment, realtime fan-out is implemented with an in-process `InMemoryEventBroker`.
+In addition to the core chat and RAG flow, the service exposes chat-processing lifecycle events. These events are persisted in SQLite and delivered to clients in real time through Server-Sent Events (SSE). For this assessment, live delivery is implemented as polling-backed SSE over persisted `chat_events` rows.
 
 ---
 
@@ -42,7 +42,7 @@ The system is divided into six main areas:
    Loads knowledge files, ranks candidate files, and returns selected document content.
 
 6. Realtime event delivery layer  
-   Broadcasts persisted chat events to connected SSE clients through an in-memory broker.
+   Tails persisted chat events from SQLite and exposes them through SSE streams.
 
 ---
 
@@ -78,9 +78,6 @@ project-root/
 │  │  ├─ enums.py
 │  │  ├─ models.py
 │  │  └─ utils.py
-│  ├─ events/
-│  │  ├─ broker.py
-│  │  └─ in_memory.py
 │  ├─ knowledge/
 │  │  ├─ indexer.py
 │  │  ├─ loader.py
@@ -115,10 +112,6 @@ project-root/
    └─ unit/
 ```
 
-`app/events` is the only new area introduced for realtime delivery. It does not own business logic or persistence. Its responsibility is transient fan-out of already-created chat events.
-
----
-
 ## 4. Layer Responsibilities
 
 | Layer | Responsibility | Must contain | Must not contain |
@@ -128,7 +121,6 @@ project-root/
 | `app/repositories` | persistence access | SQLite queries, row mapping | business workflow logic, LLM calls |
 | `app/llm` | provider integration | OpenAI client, tool schemas, tool loop | direct DB access, HTTP handlers |
 | `app/knowledge` | KB loading and retrieval | indexing, search, ranking, file reading | API logic, chat orchestration |
-| `app/events` | realtime fan-out | broker abstraction, in-memory pub/sub for SSE | persistence logic, business workflow logic |
 | `app/db` | low-level DB setup | connection and schema init | business logic |
 | `tests` | validation | integration and focused unit tests | production code |
 
@@ -139,11 +131,9 @@ project-root/
 Allowed dependency flow:
 
 - `api -> services`
-- `api -> events` only for SSE subscription wiring
 - `services -> repositories`
 - `services -> llm`
 - `services -> knowledge`
-- `services -> events`
 - `repositories -> db`
 - `knowledge -> filesystem / index data`
 - `llm -> OpenAI-compatible provider`
@@ -156,16 +146,14 @@ Forbidden dependency flow:
 - `repositories -> llm`
 - `repositories -> api`
 - `knowledge -> api`
-- `events -> repositories`
-- `events -> llm`
 
 Interpretation:
 
 - API should not know how the agent works internally.
 - Repositories should not know anything about prompts, tools, or provider behavior.
 - Knowledge retrieval should be reusable independently of FastAPI.
-- Event delivery should be replaceable without changing business logic.
-- The notification flow should publish already-created domain events rather than inventing a second event model.
+- Event delivery should be driven by durable `chat_events`, not process-local memory.
+- The notification flow should reuse the persisted event model rather than inventing a second live-only event path.
 
 ---
 
@@ -202,24 +190,23 @@ Interpretation:
 
 ### 6.3 Chat Event Flow
 
-Each chat-processing event follows two paths:
+Each chat-processing event follows one mandatory path:
 
-1. Durable path  
-   `NotificationService` stores the event in SQLite through `EventsRepository`.
+1. `NotificationService` stores the event in SQLite through `EventsRepository`.
+2. REST clients query persisted history through `/events`.
+3. SSE clients tail the same persisted `chat_events` rows through `/events/stream`.
 
-2. Realtime path  
-   `NotificationService` publishes the same event into `InMemoryEventBroker`.
-
-SSE clients subscribed to the relevant `chat_id` receive the event immediately from the broker. REST clients can still query the persisted event history later.
+This keeps `chat_events` as the durable source of truth for both replay and live delivery.
 
 ### 6.4 SSE Subscription Flow
 
 1. Client opens `GET /api/v1/chats/{chat_id}/events/stream`.
 2. API validates that the chat exists.
-3. API subscribes the connection to `InMemoryEventBroker` for that `chat_id`.
-4. API streams events as `text/event-stream`.
-5. On disconnect, the subscription is removed.
-6. If reconnect support is needed, missed events can be replayed from SQLite using the last received event id or timestamp.
+3. API resolves the stream cursor from `Last-Event-ID` when present; otherwise it starts from the latest already-persisted event so the stream tails new rows.
+4. API polls `chat_events` for rows after the current cursor, ordered by `created_at ASC, id ASC`.
+5. New rows are streamed as `text/event-stream` with `id`, `event`, and `data`.
+6. If no new rows exist, the server emits heartbeat comments to keep the connection alive.
+7. On disconnect, the generator stops cleanly.
 
 ---
 
@@ -241,46 +228,37 @@ SSE is preferred here because:
 - the frontend does not need bidirectional communication
 - event ordering maps naturally to the existing `chat_events` model
 - the implementation is simpler than WebSockets
-- updates are more timely than polling
+- the endpoint remains compatible with standard EventSource clients
 
-### 7.2 Why Not Polling
+### 7.2 Why Polling-Backed SSE
 
-Polling remains a fallback option, but it is not the primary design because it:
+This assessment explicitly avoids extra infrastructure such as Redis, but SSE still needs to work correctly when events are produced outside the current Python process. Polling-backed SSE over SQLite is the simplest production-aware compromise in that constraint set because it:
 
-- introduces avoidable latency
-- increases request overhead
-- duplicates work when no new events exist
+- uses the already-persisted `chat_events` table as the single source of truth
+- works across workers and processes that share the same SQLite database file
+- preserves deterministic ordering through the existing `(created_at, id)` index
+- stays easy to review and operate without background workers or synchronization layers
 
-The persisted `/events` endpoint remains useful for history and replay, not as the main live update channel.
+The tradeoff is deliberate:
 
-### 7.3 Broker Design
+- delivery has bounded polling latency instead of immediate in-memory fan-out
+- each open stream performs lightweight periodic reads
+- the design is suitable for assessment scope and low-scale deployments, not high-fanout realtime infrastructure
 
-For this assessment, realtime fan-out is handled by `InMemoryEventBroker`.
+### 7.3 Cursor and Ordering Model
 
-Responsibilities:
+Each SSE stream maintains its own cursor using the stable event order already stored in SQLite:
 
-- keep per-chat subscriber lists
-- publish domain events to active subscribers
-- remain transient and process-local
+- primary order: `created_at ASC`
+- tie-breaker: `id ASC`
 
-Non-responsibilities:
+Behavior:
 
-- persistence
-- event creation
-- event schema ownership
+- when `Last-Event-ID` is provided, the server resumes after that persisted event
+- when `Last-Event-ID` is absent, the stream starts after the latest already-persisted event and tails newly inserted rows
+- a heartbeat comment is emitted when no new events arrive within the heartbeat interval
 
-This keeps the broker replaceable. A future multi-instance deployment could swap the broker implementation without changing the public API or the core notification workflow.
-
-### 7.4 Current Scaling Boundary
-
-`InMemoryEventBroker` is appropriate for:
-
-- local development
-- tests
-- single-process deployment
-- assessment scope
-
-It is not a cross-process or multi-instance event bus. That limitation is acceptable here because SQLite is also an explicit assessment constraint. The architecture remains production-aware by isolating the broker behind a dedicated layer and keeping event history durable in SQLite.
+This prevents duplicate delivery within one stream while keeping reconnect behavior simple and durable.
 
 ---
 
@@ -434,7 +412,7 @@ Exact column naming may change, but the design intent is stable:
 
 - reconstruct chat history reliably
 - reconstruct processing lifecycle reliably
-- support both REST event history and SSE replay
+- support both REST event history and SSE tail/replay
 - keep event persistence independent from live delivery
 
 ---
@@ -447,4 +425,4 @@ Exact column naming may change, but the design intent is stable:
 - Provider failures should be logged explicitly.
 - Event delivery should remain observable through persisted `chat_events` even if no SSE client is connected.
 
-This ensures the system remains debuggable even though the realtime delivery path is transient.
+This ensures the system remains debuggable even though live delivery uses lightweight polling over durable state.

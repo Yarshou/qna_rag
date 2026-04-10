@@ -1,91 +1,102 @@
-import asyncio
+from pathlib import Path
 
 import pytest
 
-from app.domain import ChatEvent, EventType
-from app.events import InMemoryEventBroker
+from app.db.connection import build_connection_factory
+from app.db.init import initialize_database
+from app.domain import ChatStatus, EventType
+from app.repositories.chats import ChatsRepository
+from app.repositories.events import EventsRepository
 
 
 @pytest.mark.anyio
-async def test_in_memory_event_broker_delivers_published_event_to_subscriber() -> None:
-    broker = InMemoryEventBroker()
-    subscription = await broker.subscribe("chat-1")
-    event = ChatEvent.from_mapping(
-        {
-            "id": "evt-1",
-            "chat_id": "chat-1",
-            "event_type": EventType.MESSAGE_RECEIVED.value,
-            "payload": {"message_id": "msg-1"},
-            "created_at": "2026-04-09T10:00:00+00:00",
-        }
+async def test_events_repository_lists_events_after_cursor_in_stable_order(tmp_path: Path) -> None:
+    db_path = tmp_path / "events.sqlite3"
+    connection_factory = build_connection_factory(db_path=db_path)
+    chats_repository = ChatsRepository(connection_factory=connection_factory)
+    events_repository = EventsRepository(connection_factory=connection_factory)
+
+    await initialize_database(db_path=db_path)
+    await chats_repository.create_chat(
+        chat_id="chat-1",
+        title="Event ordering",
+        status=ChatStatus.ACTIVE.value,
+        created_at="2026-04-09T10:00:00+00:00",
+    )
+    await events_repository.create_event(
+        chat_id="chat-1",
+        event_id="evt-2",
+        event_type=EventType.MESSAGE_COMPLETED.value,
+        payload={"assistant_message_id": "msg-2"},
+        created_at="2026-04-09T10:01:00+00:00",
+    )
+    await events_repository.create_event(
+        chat_id="chat-1",
+        event_id="evt-1",
+        event_type=EventType.MESSAGE_PROCESSING.value,
+        payload={"message_id": "msg-1"},
+        created_at="2026-04-09T10:01:00+00:00",
+    )
+    await events_repository.create_event(
+        chat_id="chat-1",
+        event_id="evt-3",
+        event_type=EventType.MESSAGE_FAILED.value,
+        payload={"message_id": "msg-3"},
+        created_at="2026-04-09T10:02:00+00:00",
     )
 
-    await broker.publish(event)
+    ordered_events = await events_repository.list_events_after(chat_id="chat-1")
+    events_after_cursor = await events_repository.list_events_after(
+        chat_id="chat-1",
+        after_created_at="2026-04-09T10:01:00+00:00",
+        after_id="evt-1",
+    )
 
-    delivered = await asyncio.wait_for(subscription.queue.get(), timeout=0.5)
-    assert delivered.id == event.id
+    assert [event["id"] for event in ordered_events] == ["evt-1", "evt-2", "evt-3"]
+    assert [event["id"] for event in events_after_cursor] == ["evt-2", "evt-3"]
 
 
 @pytest.mark.anyio
-async def test_in_memory_event_broker_filters_events_by_chat_id() -> None:
-    broker = InMemoryEventBroker()
-    subscription = await broker.subscribe("chat-1")
-    other_event = ChatEvent.from_mapping(
-        {
-            "id": "evt-2",
-            "chat_id": "chat-2",
-            "event_type": EventType.MESSAGE_PROCESSING.value,
-            "payload": None,
-            "created_at": "2026-04-09T10:00:01+00:00",
-        }
+async def test_events_repository_returns_chat_scoped_event_by_id(tmp_path: Path) -> None:
+    db_path = tmp_path / "events.sqlite3"
+    connection_factory = build_connection_factory(db_path=db_path)
+    chats_repository = ChatsRepository(connection_factory=connection_factory)
+    events_repository = EventsRepository(connection_factory=connection_factory)
+
+    await initialize_database(db_path=db_path)
+    await chats_repository.create_chat(
+        chat_id="chat-1",
+        title="Lookup chat",
+        status=ChatStatus.ACTIVE.value,
+        created_at="2026-04-09T10:00:00+00:00",
+    )
+    await chats_repository.create_chat(
+        chat_id="chat-2",
+        title="Other chat",
+        status=ChatStatus.ACTIVE.value,
+        created_at="2026-04-09T10:05:00+00:00",
+    )
+    await events_repository.create_event(
+        chat_id="chat-1",
+        event_id="evt-1",
+        event_type=EventType.MESSAGE_RECEIVED.value,
+        payload={"message_id": "msg-1"},
+        created_at="2026-04-09T10:01:00+00:00",
+    )
+    await events_repository.create_event(
+        chat_id="chat-2",
+        event_id="evt-2",
+        event_type=EventType.MESSAGE_RECEIVED.value,
+        payload={"message_id": "msg-2"},
+        created_at="2026-04-09T10:06:00+00:00",
     )
 
-    await broker.publish(other_event)
+    event = await events_repository.get_event(chat_id="chat-1", event_id="evt-1")
+    missing_event = await events_repository.get_event(chat_id="chat-1", event_id="evt-2")
+    latest_event = await events_repository.get_latest_event(chat_id="chat-2")
 
-    with pytest.raises(asyncio.QueueEmpty):
-        subscription.queue.get_nowait()
-
-
-@pytest.mark.anyio
-async def test_in_memory_event_broker_supports_multiple_subscribers_for_same_chat() -> None:
-    broker = InMemoryEventBroker()
-    first = await broker.subscribe("chat-1")
-    second = await broker.subscribe("chat-1")
-    event = ChatEvent.from_mapping(
-        {
-            "id": "evt-3",
-            "chat_id": "chat-1",
-            "event_type": EventType.TOOL_CALLED.value,
-            "payload": {"tool_name": "read_knowledge_file"},
-            "created_at": "2026-04-09T10:00:02+00:00",
-        }
-    )
-
-    await broker.publish(event)
-
-    assert (await asyncio.wait_for(first.queue.get(), timeout=0.5)).id == event.id
-    assert (await asyncio.wait_for(second.queue.get(), timeout=0.5)).id == event.id
-
-
-@pytest.mark.anyio
-async def test_in_memory_event_broker_unsubscribe_is_safe_and_does_not_break_other_subscribers() -> None:
-    broker = InMemoryEventBroker()
-    removed = await broker.subscribe("chat-1")
-    active = await broker.subscribe("chat-1")
-    await broker.unsubscribe(removed)
-    await broker.unsubscribe(removed)
-    event = ChatEvent.from_mapping(
-        {
-            "id": "evt-4",
-            "chat_id": "chat-1",
-            "event_type": EventType.MESSAGE_COMPLETED.value,
-            "payload": {"assistant_message_id": "msg-2"},
-            "created_at": "2026-04-09T10:00:03+00:00",
-        }
-    )
-
-    await broker.publish(event)
-
-    assert (await asyncio.wait_for(active.queue.get(), timeout=0.5)).id == event.id
-    with pytest.raises(asyncio.QueueEmpty):
-        removed.queue.get_nowait()
+    assert event is not None
+    assert event["chat_id"] == "chat-1"
+    assert missing_event is None
+    assert latest_event is not None
+    assert latest_event["id"] == "evt-2"

@@ -1,9 +1,15 @@
-[tool.poetry]
+[project]
 name = "qna-rag"
 version = "0.1.0"
-description = ""
-authors = ["daniil_yarshou daniil_yarshou@epam.com"]
+description = "Backend-only QnA agent API with FastAPI, SQLite, and Azure OpenAI tool calling."
 readme = "README.md"
+requires-python = ">=3.13,<4.0"
+dynamic = ["dependencies"]
+authors = [
+    {name = "Daniil Yarshou", email = "daniil_yarshou@epam.com"}
+]
+
+[tool.poetry]
 package-mode = false
 
 [tool.poetry.dependencies]
@@ -49,6 +55,9 @@ ignore = [
 [tool.isort]
 profile = "black"
 line_length = 125
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 [dependency-groups]
 dev = [

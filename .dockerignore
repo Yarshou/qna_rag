@@ -1,5 +1,6 @@
 .git
 .gitignore
+.codex/
 .idea
 .pytest_cache
 .ruff_cache
@@ -12,4 +13,4 @@ tests/
 docs/
 AGENTS.md
 app/envs/.env
-app/data/*.sqlite3
+app/data/

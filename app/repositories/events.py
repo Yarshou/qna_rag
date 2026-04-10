@@ -67,6 +67,80 @@ class EventsRepository:
         )
         return [self._row_to_event(row) for row in rows]
 
+    async def list_events_after(
+        self,
+        chat_id: str,
+        *,
+        after_created_at: str | None = None,
+        after_id: str | None = None,
+        limit: int | None = None,
+        connection: aiosqlite.Connection | None = None,
+    ) -> list[dict[str, object | None]]:
+        if (after_created_at is None) != (after_id is None):
+            raise ValueError("after_created_at and after_id must be provided together.")
+
+        query = """
+            SELECT id, chat_id, event_type, payload_json, created_at
+            FROM chat_events
+            WHERE chat_id = ?
+        """
+        parameters: list[object] = [chat_id]
+
+        if after_created_at is not None and after_id is not None:
+            query += "\nAND (created_at > ? OR (created_at = ? AND id > ?))"
+            parameters.extend([after_created_at, after_created_at, after_id])
+
+        query += "\nORDER BY created_at ASC, id ASC"
+        if limit is not None:
+            query += "\nLIMIT ?"
+            parameters.append(limit)
+
+        rows = await self._fetch_all(
+            query=query,
+            parameters=tuple(parameters),
+            connection=connection,
+        )
+        return [self._row_to_event(row) for row in rows]
+
+    async def get_event(
+        self,
+        chat_id: str,
+        event_id: str,
+        *,
+        connection: aiosqlite.Connection | None = None,
+    ) -> dict[str, object | None] | None:
+        query = """
+            SELECT id, chat_id, event_type, payload_json, created_at
+            FROM chat_events
+            WHERE chat_id = ? AND id = ?
+        """
+        row = await self._fetch_one(
+            query=query,
+            parameters=(chat_id, event_id),
+            connection=connection,
+        )
+        return self._row_to_event(row) if row is not None else None
+
+    async def get_latest_event(
+        self,
+        chat_id: str,
+        *,
+        connection: aiosqlite.Connection | None = None,
+    ) -> dict[str, object | None] | None:
+        query = """
+            SELECT id, chat_id, event_type, payload_json, created_at
+            FROM chat_events
+            WHERE chat_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+        """
+        row = await self._fetch_one(
+            query=query,
+            parameters=(chat_id,),
+            connection=connection,
+        )
+        return self._row_to_event(row) if row is not None else None
+
     @staticmethod
     def _row_to_event(row: Mapping[str, object]) -> dict[str, object | None]:
         return {
@@ -91,6 +165,24 @@ class EventsRepository:
                 return await cursor.fetchall()
         except aiosqlite.Error as exc:
             raise DatabaseError("Failed to fetch event rows.") from exc
+        finally:
+            if managed_connection:
+                await active_connection.close()
+
+    async def _fetch_one(
+        self,
+        *,
+        query: str,
+        parameters: tuple[object, ...],
+        connection: aiosqlite.Connection | None,
+    ) -> aiosqlite.Row | None:
+        managed_connection = connection is None
+        active_connection = connection or await self._connection_factory()
+        try:
+            async with active_connection.execute(query, parameters) as cursor:
+                return await cursor.fetchone()
+        except aiosqlite.Error as exc:
+            raise DatabaseError("Failed to fetch event row.") from exc
         finally:
             if managed_connection:
                 await active_connection.close()

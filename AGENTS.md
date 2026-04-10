@@ -17,7 +17,7 @@ Primary goal: satisfy assessment requirements with a clear, production-aware arc
 - Use SQLite for persistence
 - Do not use SQLAlchemy or any ORM
 - Do not use LangChain, LlamaIndex, Haystack, or similar libraries
-- Use OpenAI Python SDK with base URL and API key from environment variables
+- Use OpenAI Python SDK with base URL or API key from environment variables
 - No UI (API only)
 - Persist all chats, messages, and relevant processing data
 - Use pytest with async support
@@ -99,7 +99,7 @@ Primary goal: satisfy assessment requirements with a clear, production-aware arc
 ## Operational Requirements
 
 - Configuration must come from environment variables
-- Provide health and readiness endpoints
+- Provide health endpoint
 - Initialize SQLite schema explicitly and idempotently
 - Docker must use multi-stage build
 - Container must run as non-root user
