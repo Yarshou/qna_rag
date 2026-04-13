@@ -3,6 +3,12 @@ import logging
 from typing import Any
 
 from openai import APIError, AzureOpenAI, OpenAI
+from openai.types.chat import (
+    ChatCompletion,
+    ChatCompletionMessageParam,
+    ChatCompletionToolChoiceOptionParam,
+    ChatCompletionToolParam,
+)
 
 from app.config import settings
 from app.llm.exceptions import LLMClientConfigurationError, LLMProviderError
@@ -76,13 +82,13 @@ class OpenAIChatClient:
 
     def create_chat_completion(
         self,
-        messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]] | None = None,
-        tool_choice: str | dict[str, Any] = "auto",
-    ) -> Any:
+        messages: list[ChatCompletionMessageParam],
+        tools: list[ChatCompletionToolParam] | None = None,
+        tool_choice: ChatCompletionToolChoiceOptionParam = "auto",
+    ) -> ChatCompletion:
         """Execute a synchronous chat completion request against the configured provider."""
         try:
-            response = self._client.chat.completions.create(
+            response: ChatCompletion = self._client.chat.completions.create(
                 model=self._model,
                 messages=messages,
                 tools=tools,
@@ -114,10 +120,10 @@ class OpenAIChatClient:
 
     async def create_chat_completion_async(
         self,
-        messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]] | None = None,
-        tool_choice: str | dict[str, Any] = "auto",
-    ) -> Any:
+        messages: list[ChatCompletionMessageParam],
+        tools: list[ChatCompletionToolParam] | None = None,
+        tool_choice: ChatCompletionToolChoiceOptionParam = "auto",
+    ) -> ChatCompletion:
         """Run the synchronous SDK call in a worker thread for use in async service code."""
         return await asyncio.to_thread(
             self.create_chat_completion,
