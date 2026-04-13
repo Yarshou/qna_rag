@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qna-rag-sqlite
+  namespace: default
+spec:
+  # SQLite requires exclusive write access — ReadWriteOnce is correct.
+  # This limits the Deployment to a single replica (see deployment.yaml).
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # storageClassName: standard   # override if your cluster uses a different class

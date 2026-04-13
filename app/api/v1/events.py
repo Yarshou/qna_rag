@@ -167,7 +167,8 @@ async def stream_events(
             chat_id=chat_id,
             notification_service=notification_service,
         )
-    except Exception:
+    except Exception as e:
+        logger.exception("stream_events", extra={"chat_id": chat_id, "cursor_id": cursor_id, "exception": e})
         return _error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error", "Failed to open event stream.")
 
     return StreamingResponse(

@@ -34,7 +34,7 @@ def score_document(document: KnowledgeDocument, query: str) -> float:
     frequency_score = float(sum(min(token_counts[token], 5) for token in unique_query_tokens))
     filename_score = float(sum(1 for token in unique_query_tokens if token in filename_tokens) * 3)
 
-    normalized_query = normalize_whitespace(query.lower())
+    normalized_query = normalize_whitespace(" ".join(unique_query_tokens))
     normalized_content = normalize_whitespace(document.content.lower())
     phrase_score = 4.0 if normalized_query and normalized_query in normalized_content else 0.0
 

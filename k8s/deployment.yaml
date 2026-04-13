@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qna-rag
+  namespace: default
+  labels:
+    app: qna-rag
+spec:
+  # SQLite uses ReadWriteOnce storage — only one replica can mount the volume
+  # at a time. Scale horizontally only after migrating to a shared database.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qna-rag
+  template:
+    metadata:
+      labels:
+        app: qna-rag
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
+      containers:
+        - name: qna-rag
+          # For kind/minikube you can use a locally loaded image.
+          # For a remote cluster replace this with a registry-backed image.
+          image: qna-rag:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+
+          env:
+            # ── Base settings ───────────────────────────────────────────────
+            - name: DEBUG
+              value: "false"
+            - name: APP_PORT
+              value: "8000"
+            - name: APP_WORKERS
+              value: "1"
+            - name: DATABASE_PATH
+              value: /data/qna_rag.sqlite3
+            - name: KNOWLEDGE_DIR
+              value: /qna_rag/knowledge
+
+            # ── Option A: Azure OpenAI (comment out if using Option B) ──────
+            - name: AZURE_OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: qna-rag-secrets
+                  key: azure-openai-api-key
+            - name: AZURE_OPENAI_ENDPOINT
+              value: "https://example-resource.openai.azure.com/"  # not sensitive
+            - name: OPENAI_API_VERSION
+              value: "2024-02-15-preview"
+            - name: AZURE_OPENAI_DEPLOYMENT
+              value: "gpt-4.1"
+
+            # ── Option B: Generic OpenAI-compatible provider ────────────────
+            # - name: OPENAI_API_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: qna-rag-secrets
+            #       key: openai-api-key
+            # - name: OPENAI_BASE_URL
+            #   value: "https://openrouter.ai/api/v1"
+            # - name: OPENAI_MODEL
+            #   value: "meta-llama/llama-3-8b-instruct"
+
+          volumeMounts:
+            - name: sqlite-data
+              mountPath: /data
+
+          # Liveness: restarts the container if the process stops responding.
+          livenessProbe:
+            httpGet:
+              path: /api/v1/healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+
+          # Readiness: prevents traffic until the DB is accessible.
+          readinessProbe:
+            httpGet:
+              path: /api/v1/readyz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+      volumes:
+        - name: sqlite-data
+          persistentVolumeClaim:
+            claimName: qna-rag-sqlite

@@ -24,6 +24,7 @@ class ToolExecutor:
     def __init__(self, knowledge_access: KnowledgeAccessProtocol) -> None:
         self._knowledge_access = knowledge_access
         self._full_file_reads = 0
+        self._allowed_file_ids: set[str] | None = None
 
     def execute_tool_call(self, tool_name: str, arguments: str | dict[str, Any] | None) -> dict[str, Any]:
         """Execute one tool call and return a structured result payload."""
@@ -102,6 +103,7 @@ class ToolExecutor:
             raise InvalidToolArgumentsError("search_knowledge_base limit must be at least 1.")
 
         result = self._knowledge_access.search_knowledge_base(query=query.strip(), limit=limit)
+        self._allowed_file_ids = {hit.file_id for hit in result.hits}
         logger.info(
             "knowledge_tool_search_executed",
             extra={"tool_name": "search_knowledge_base", "limit": limit, "hits": len(result.hits)},
@@ -113,18 +115,21 @@ class ToolExecutor:
         if not isinstance(file_id, str) or not file_id.strip():
             raise InvalidToolArgumentsError("read_knowledge_file requires a non-empty string file_id.")
 
+        normalized_file_id = file_id.strip()
+        self._ensure_read_allowed(file_id=normalized_file_id)
+
         if self._full_file_reads >= MAX_KNOWLEDGE_FILES_IN_CONTEXT:
             raise InvalidToolArgumentsError(
                 f"read_knowledge_file is limited to {MAX_KNOWLEDGE_FILES_IN_CONTEXT} files per execution flow."
             )
 
-        document = self._knowledge_access.read_knowledge_file(file_id=file_id.strip())
+        document = self._knowledge_access.read_knowledge_file(file_id=normalized_file_id)
         self._full_file_reads += 1
         logger.info(
             "knowledge_tool_read_executed",
             extra={
                 "tool_name": "read_knowledge_file",
-                "file_id": file_id.strip(),
+                "file_id": normalized_file_id,
                 "read_count": self._full_file_reads,
                 "found": document is not None,
             },
@@ -132,7 +137,7 @@ class ToolExecutor:
 
         if document is None:
             return {
-                "file_id": file_id.strip(),
+                "file_id": normalized_file_id,
                 "found": False,
                 "content": None,
             }
@@ -143,8 +148,21 @@ class ToolExecutor:
         }
 
     def reset_context_limits(self) -> None:
-        """Reset per-flow read counters before starting a new tool-calling pass."""
+        """Reset per-flow read counters and search allowlist before a new tool-calling pass."""
         self._full_file_reads = 0
+        self._allowed_file_ids = None
+
+    def _ensure_read_allowed(self, *, file_id: str) -> None:
+        if self._allowed_file_ids is None:
+            raise InvalidToolArgumentsError(
+                "read_knowledge_file requires a prior successful search_knowledge_base call in the current execution flow."
+            )
+
+        if file_id not in self._allowed_file_ids:
+            raise InvalidToolArgumentsError(
+                f"read_knowledge_file file_id '{file_id}' was not returned by the last successful "
+                "search_knowledge_base call."
+            )
 
     @staticmethod
     def _serialize_result(value: Any) -> Any:

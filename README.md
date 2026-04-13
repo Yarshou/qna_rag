@@ -4,18 +4,18 @@
 
 The service supports chat sessions, AI-generated answers, deterministic knowledge retrieval through explicit tool calling, persisted event history, and live event streaming over SSE.
 
-The implementation stays intentionally explicit: FastAPI for HTTP, SQLite with raw SQL for persistence, the OpenAI Python SDK for Azure OpenAI-compatible calls, and a local file-based knowledge base with at most two full documents loaded into model context.
+The implementation stays intentionally explicit: FastAPI for HTTP, SQLite with raw SQL for persistence, the OpenAI Python SDK for chat completions, and a local file-based knowledge base with at most two full documents loaded into model context.
 
 ## Features / Capabilities
 
 - Chat session creation, listing, and deletion
 - Persisted chat message history in SQLite
-- AI-generated assistant responses through Azure OpenAI-compatible chat completions
+- AI-generated assistant responses through any OpenAI-compatible provider
 - Local knowledge-base retrieval through explicit tool/function calling
 - Persisted chat lifecycle events
 - Event history endpoint plus polling-backed SSE stream over persisted `chat_events`
 - Structured JSON request and workflow logging
-- Health endpoint
+- Liveness and readiness health endpoints
 
 ## Tech Stack
 
@@ -36,6 +36,7 @@ The implementation stays intentionally explicit: FastAPI for HTTP, SQLite with r
 - `app/db` - SQLite connection helpers and schema initialization
 - `tests` - integration and unit tests
 - `knowledge` - runtime plain-text knowledge files
+- `k8s` - Kubernetes manifests (Deployment, Service, PVC, Secret template, optional Ingress template)
 - `docs` - supporting design documentation
 
 ## Prerequisites
@@ -48,20 +49,60 @@ The implementation stays intentionally explicit: FastAPI for HTTP, SQLite with r
 
 The application reads configuration from `app/envs/.env` by default. Start by copying `app/envs/example.env` to that location.
 
+### Base settings
+
 | Variable | Required | Default | Example | Purpose |
 | --- | --- | --- | --- | --- |
 | `DEBUG` | Yes | None | `true` | Enables FastAPI debug mode. |
 | `APP_PORT` | Yes | None | `8000` | Startup setting required by `Settings`. The provided commands bind the API to port `8000`. |
 | `APP_WORKERS` | Yes | None | `1` | Deployment-oriented setting required by `Settings`. SSE tails persisted `chat_events` from SQLite, so live delivery no longer depends on process-local memory, though SQLite still sets practical scaling limits. |
 | `DATABASE_PATH` | No | `app/data/qna_rag.sqlite3` | `app/data/qna_rag.sqlite3` | SQLite database location. Relative paths are resolved from the repository root. |
-| `KNOWLEDGE_DIR` | Required for message endpoints | `None` | `./knowledge` | Directory containing local plain-text knowledge files. `MessageService` initializes the knowledge tool executor eagerly, so `/messages` routes need this configured. |
-| `AZURE_OPENAI_API_KEY` | Required for assistant responses | `None` | `replace-me` | Azure OpenAI API key. |
-| `AZURE_OPENAI_ENDPOINT` | Required for assistant responses | `None` | `https://example-resource.openai.azure.com/` | Azure OpenAI endpoint base URL. |
-| `OPENAI_API_VERSION` | Required for assistant responses | `None` | `2024-02-15-preview` | Azure OpenAI API version. |
-| `AZURE_OPENAI_DEPLOYMENT` | Required for assistant responses | `None` | `gpt-4.1` | Azure OpenAI deployment name passed as the model identifier. |
+| `KNOWLEDGE_DIR` | Required for message endpoints | `None` | `./knowledge` | Directory containing local plain-text knowledge files. |
+
+### LLM provider — configure ONE of the two options below
+
+The client auto-detects the active provider from which variable group is present. Azure takes precedence when both are configured.
+
+**Option A — Azure OpenAI** (set `AZURE_OPENAI_ENDPOINT`):
+
+| Variable | Required | Default | Example | Purpose |
+| --- | --- | --- | --- | --- |
+| `AZURE_OPENAI_API_KEY` | Yes | `None` | `replace-me` | Azure OpenAI API key. |
+| `AZURE_OPENAI_ENDPOINT` | Yes | `None` | `https://example-resource.openai.azure.com/` | Azure resource base URL. |
+| `OPENAI_API_VERSION` | Yes | `None` | `2024-02-15-preview` | Azure OpenAI API version. |
+| `AZURE_OPENAI_DEPLOYMENT` | Yes | `None` | `gpt-4.1` | Deployment / model name. |
+
+**Option B — Generic OpenAI-compatible provider** (set `OPENAI_BASE_URL`):
+
+Works with OpenRouter, EPAM DIAL, local Ollama, and any other provider that implements the OpenAI chat-completions API.
+
+| Variable | Required | Default | Example | Purpose |
+| --- | --- | --- | --- | --- |
+| `OPENAI_API_KEY` | Yes | `None` | `replace-me` | Provider-issued API key. Use `ollama` for local Ollama. |
+| `OPENAI_BASE_URL` | Yes | `None` | `https://openrouter.ai/api/v1` | Provider base URL. |
+| `OPENAI_MODEL` | Yes | `None` | `meta-llama/llama-3-8b-instruct` | Model identifier passed to the provider. |
+
+Provider examples:
+
+```bash
+# OpenRouter
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_API_KEY=<your-openrouter-key>
+OPENAI_MODEL=meta-llama/llama-3-8b-instruct
+
+# EPAM DIAL
+OPENAI_BASE_URL=https://<dial-host>/openai
+OPENAI_API_KEY=<your-dial-key>
+OPENAI_MODEL=gpt-4
+
+# Local Ollama
+OPENAI_BASE_URL=http://localhost:11434/v1
+OPENAI_API_KEY=ollama
+OPENAI_MODEL=llama3
+```
 
 Operational note:
-`APP_PORT` and `APP_WORKERS` are validated by the settings layer, but only `APP_PORT=8000` is reflected by the provided run commands. The provided local commands still run a simple single-process server, while the SSE implementation itself now reads persisted `chat_events` from SQLite instead of relying on a process-local broker.
+`APP_PORT` and `APP_WORKERS` are validated by the settings layer, but only `APP_PORT=8000` is reflected by the provided run commands. The provided local commands still run a simple single-process server, while the SSE implementation reads persisted `chat_events` from SQLite instead of relying on a process-local broker.
 
 ## Local Setup
 
@@ -84,7 +125,7 @@ Operational note:
    cp app/envs/example.env app/envs/.env
    ```
 
-4. Edit `app/envs/.env` and replace the Azure OpenAI placeholders before using `POST /api/v1/chats/{chat_id}/messages`.
+4. Edit `app/envs/.env` and fill in the LLM provider credentials before using `POST /api/v1/chats/{chat_id}/messages`.
 
 5. Start the API locally.
 
@@ -96,6 +137,7 @@ Operational note:
 
    ```bash
    curl http://127.0.0.1:8000/api/v1/healthz
+   curl http://127.0.0.1:8000/api/v1/readyz
    ```
 
 ## Run Commands
@@ -135,7 +177,7 @@ Or through `make`:
 make test
 ```
 
-The current test suite uses local fixtures and fakes for API-level coverage, so the default path does not require live Azure credentials.
+Most tests use local fixtures and fakes and run without any LLM credentials. Integration tests in `tests/integration/test_rag.py` hit a real provider and are skipped automatically when no credentials are present. To run them, configure either provider group in `app/envs/.env`.
 
 ## Docker Usage
 
@@ -155,12 +197,54 @@ The SQLite database is stored inside the container at `/qna_rag/app/data/qna_rag
 
 The `knowledge/` directory is copied into the image at build time. If you change knowledge files locally, rebuild the image or run the API outside Docker to use the updated content.
 
+## Kubernetes
+
+Ready-to-use manifests live in `k8s/`:
+
+| File | Purpose |
+| --- | --- |
+| `k8s/deployment.yaml` | Deployment with probes, resource limits, and PVC volume mount |
+| `k8s/service.yaml` | ClusterIP Service (port 80 → 8000) |
+| `k8s/pvc.yaml` | PersistentVolumeClaim for SQLite (1 Gi, ReadWriteOnce) |
+| `k8s/secret.yaml.example` | Secret template — fill in and apply, **do not commit** |
+| `k8s/ingress.yaml.example` | Optional Ingress template for host-based external access and TLS termination |
+
+Quick start:
+
+```bash
+# 0. Build and publish the image, or load it into your local cluster runtime.
+# For a remote cluster, replace image: qna-rag:latest in k8s/deployment.yaml
+# with your registry image before applying manifests.
+
+# 1. Create the secret (do not store real values in source control)
+kubectl create secret generic qna-rag-secrets \
+  --from-literal=azure-openai-api-key=<your-key>
+
+# 2. Apply the remaining manifests
+kubectl apply -f k8s/pvc.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+```
+
+Access options:
+
+- Without Ingress: the current templates deploy correctly with only `Deployment` + `Service` + `PVC` + `Secret`. In that mode the app is reachable only inside the cluster. For local access use `kubectl port-forward svc/qna-rag 8000:80`, or change the Service to `LoadBalancer` / `NodePort` if your cluster/network model allows it.
+- With Ingress: apply `k8s/ingress.yaml.example` after replacing the host and ingress class. This is the preferred option when you need stable external HTTP(S) access and TLS termination.
+
+See [docs/production.md](docs/production.md) for guidance on secret management, TLS termination, persistent storage, observability, and scaling considerations.
+
 ## API Examples
 
-Health check:
+Liveness check (process alive, no I/O):
 
 ```bash
 curl http://127.0.0.1:8000/api/v1/healthz
+```
+
+Readiness check (DB reachable — used by Kubernetes `readinessProbe`):
+
+```bash
+curl http://127.0.0.1:8000/api/v1/readyz
 ```
 
 Create a chat:
@@ -224,9 +308,10 @@ data: {"id":"evt-1","chat_id":"chat-1","event_type":"message_received","payload"
 
 - Live SSE delivery is polling-backed over persisted `chat_events` in SQLite. This removes process-local broker coupling and works across workers or processes that share the same database file, but introduces small polling latency and is not intended for high-fanout realtime workloads.
 - Knowledge retrieval only considers plain-text files with supported extensions such as `.txt`, `.md`, `.rst`, and `.text`.
-- The agent can load at most two full knowledge files into model context.
-- Assistant message generation requires valid Azure OpenAI settings; chat creation, listing, deletion, and health checks do not.
+- Full knowledge-file reads are enforced through the tool executor: the model must call `search_knowledge_base` first, may only read `file_id` values returned by the most recent successful search, and can load at most two full knowledge files in one execution flow.
+- Assistant message generation requires a configured LLM provider; chat creation, listing, deletion, and health checks do not.
 
 ## Documentation Links
 
 - [Architecture overview](docs/architecture.md)
+- [Production considerations](docs/production.md)

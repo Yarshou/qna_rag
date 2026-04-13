@@ -287,6 +287,13 @@ Returns full content only for selected files.
 
 This split matters because it prevents naive prompt stuffing and keeps tool usage explicit.
 
+`ToolExecutor` enforces this sequence in code, not only in prompts:
+
+- each message-processing flow starts with an empty read allowlist
+- a successful `search_knowledge_base` call replaces that allowlist with the returned `file_id` values
+- `read_knowledge_file` is rejected unless its `file_id` came from the most recent successful search result
+- no more than 2 full-file reads are allowed within one execution flow
+
 ### 8.3 Tool-Calling Model
 
 The model must access KB only through tool/function calling.
@@ -320,6 +327,7 @@ The final answer may only be grounded on:
 - retrieved KB data returned by tools
 
 The final model context must never contain more than 2 full KB files.
+The model also cannot read arbitrary files by guessing `file_id`; full reads are limited to the last retrieval result only.
 
 ### 8.5 Retrieval Implementation Direction
 

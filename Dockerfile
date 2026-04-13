@@ -28,7 +28,9 @@ COPY --from=builder /qna_rag/.venv /qna_rag/.venv
 COPY app ./app
 COPY knowledge ./knowledge
 
-RUN mkdir -p /qna_rag/app/data && chown -R app:app /qna_rag
+RUN mkdir -p /qna_rag/app/data \
+    && chmod -R a+rX /qna_rag/app /qna_rag/knowledge \
+    && chown -R app:app /qna_rag
 
 USER app
 

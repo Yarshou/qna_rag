@@ -8,8 +8,8 @@ from app.config import settings
 from app.domain import Message, MessageRole
 from app.knowledge import KnowledgeLoader, KnowledgeRetriever
 from app.llm import (
-    AzureOpenAIChatClient,
     LLMProviderError,
+    OpenAIChatClient,
     ToolExecutor,
     build_chat_messages,
     get_knowledge_base_tools,
@@ -51,7 +51,7 @@ class MessageService:
         messages_repository: MessagesRepository | None = None,
         notification_service: NotificationService | None = None,
         context_service: ContextService | None = None,
-        llm_client: AzureOpenAIChatClient | None = None,
+        llm_client: OpenAIChatClient | None = None,
         tool_executor: ToolExecutor | None = None,
         max_tool_round_trips: int = 4,
     ) -> None:
@@ -59,7 +59,7 @@ class MessageService:
         self._messages_repository = messages_repository or MessagesRepository()
         self._notification_service = notification_service or NotificationService()
         self._context_service = context_service or ContextService(self._messages_repository)
-        self._llm_client = llm_client or AzureOpenAIChatClient()
+        self._llm_client = llm_client or OpenAIChatClient()
         self._tool_executor = tool_executor or self._build_tool_executor()
         self._max_tool_round_trips = max_tool_round_trips
 
