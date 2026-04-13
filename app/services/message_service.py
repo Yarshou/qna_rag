@@ -6,10 +6,11 @@ from typing import Any
 
 from app.config import settings
 from app.domain import Message, MessageRole
+from app.guardrails import InputGuard, OutputGuard
 from app.knowledge import KnowledgeLoader, KnowledgeRetriever
 from app.llm import (
+    AzureOpenAIChatClient,
     LLMProviderError,
-    OpenAIChatClient,
     ToolExecutor,
     build_chat_messages,
     get_knowledge_base_tools,
@@ -51,16 +52,20 @@ class MessageService:
         messages_repository: MessagesRepository | None = None,
         notification_service: NotificationService | None = None,
         context_service: ContextService | None = None,
-        llm_client: OpenAIChatClient | None = None,
+        llm_client: AzureOpenAIChatClient | None = None,
         tool_executor: ToolExecutor | None = None,
+        input_guard: InputGuard | None = None,
+        output_guard: OutputGuard | None = None,
         max_tool_round_trips: int = 4,
     ) -> None:
         self._chat_service = chat_service or ChatService()
         self._messages_repository = messages_repository or MessagesRepository()
         self._notification_service = notification_service or NotificationService()
         self._context_service = context_service or ContextService(self._messages_repository)
-        self._llm_client = llm_client or OpenAIChatClient()
+        self._llm_client = llm_client or AzureOpenAIChatClient()
         self._tool_executor = tool_executor or self._build_tool_executor()
+        self._input_guard = input_guard or InputGuard()
+        self._output_guard = output_guard or OutputGuard()
         self._max_tool_round_trips = max_tool_round_trips
 
     async def list_messages(self, chat_id: str) -> list[Message]:
@@ -89,10 +94,12 @@ class MessageService:
             provider_messages = build_chat_messages(history=prior_history, user_message=user_message)
 
             self._tool_executor.reset_context_limits()
+            self._input_guard.check(content)
             assistant_content, tool_calls_executed, used_knowledge_files = await self._run_agent_flow(
                 chat_id=chat_id,
                 provider_messages=provider_messages,
             )
+            assistant_content = self._output_guard.check(assistant_content, tool_calls_executed)
 
             assistant_metadata = {
                 "tool_calls_executed": tool_calls_executed,

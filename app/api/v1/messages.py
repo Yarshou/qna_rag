@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 
 from app.domain import Message
+from app.guardrails import GuardrailViolationError
 from app.llm import InvalidToolArgumentsError, LLMClientConfigurationError, LLMProviderError, UnsupportedToolError
 from app.schemas.common import ErrorResponse
 from app.schemas.messages import MessageListResponse, MessageResponse, PostMessageRequest, PostMessageResponse
@@ -12,6 +13,7 @@ from app.services import ChatNotFoundError, MessageProcessingError, MessageServi
 router = APIRouter(tags=["messages"])
 
 ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "Guardrail violation."},
     404: {"model": ErrorResponse, "description": "Chat not found."},
     422: {"model": ErrorResponse, "description": "Invalid request payload."},
     500: {"model": ErrorResponse, "description": "Internal server error."},
@@ -71,6 +73,8 @@ async def post_message(
 ) -> PostMessageResponse | JSONResponse:
     try:
         result = await service.post_user_message(chat_id, request.content)
+    except GuardrailViolationError as exc:
+        return _error_response(status.HTTP_400_BAD_REQUEST, "guardrail_violation", str(exc))
     except ChatNotFoundError as exc:
         return _error_response(status.HTTP_404_NOT_FOUND, "chat_not_found", str(exc))
     except LLMProviderError:
