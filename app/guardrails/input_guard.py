@@ -1,10 +1,7 @@
 import re
 
+from app.config import settings
 from app.guardrails.exceptions import GuardrailViolationError
-
-# Upper bound chosen to comfortably fit a real question while preventing
-# context-flooding attacks that would saturate the model's context window.
-_MAX_CONTENT_LENGTH = 4_000
 
 # Well-known prompt-injection patterns.  These are structurally distinctive
 # enough that they almost never appear in legitimate questions, so the
@@ -31,12 +28,16 @@ class InputGuard:
 
     Two checks are applied, in order of cheapness:
     1. Length — a hard structural limit that prevents context flooding.
+       Configurable via MAX_INPUT_LENGTH (default: 4 000 chars).
     2. Injection patterns — a deny-list of well-known prompt-injection
        phrases caught before the model ever sees the message.
 
     Neither check attempts to reason about intent or domain; both operate
     on objective, measurable properties of the text.
     """
+
+    def __init__(self, max_content_length: int | None = None) -> None:
+        self._max_content_length = max_content_length if max_content_length is not None else settings.MAX_INPUT_LENGTH
 
     def check(self, content: str) -> None:
         self._check_length(content)
@@ -47,9 +48,9 @@ class InputGuard:
     # ------------------------------------------------------------------
 
     def _check_length(self, content: str) -> None:
-        if len(content) > _MAX_CONTENT_LENGTH:
+        if len(content) > self._max_content_length:
             raise GuardrailViolationError(
-                f"Message exceeds the maximum allowed length of {_MAX_CONTENT_LENGTH} characters."
+                f"Message exceeds the maximum allowed length of {self._max_content_length} characters."
             )
 
     def _check_injection(self, content: str) -> None:

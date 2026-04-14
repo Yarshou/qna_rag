@@ -19,6 +19,19 @@ class Settings(BaseSettings):
     DATABASE_PATH: Path = BASE_DIR / "data" / "qna_rag.sqlite3"
     KNOWLEDGE_DIR: Path | None = None
 
+    # ── Guardrail limits ──────────────────────────────────────────────────────
+    # Hard character limits for user input and assistant output.
+    MAX_INPUT_LENGTH: PositiveInt = 4_000
+    MAX_OUTPUT_LENGTH: PositiveInt = 8_000
+
+    # ── Agent flow limits ─────────────────────────────────────────────────────
+    # Maximum LLM ↔ tool round-trips before the flow is terminated.
+    MAX_TOOL_ROUND_TRIPS: PositiveInt = 4
+
+    # ── Knowledge base limits ─────────────────────────────────────────────────
+    # Files larger than this threshold are skipped during KB indexing.
+    KNOWLEDGE_MAX_FILE_SIZE_MB: PositiveInt = 10
+
     # Azure OpenAI provider (active when AZURE_OPENAI_ENDPOINT is set)
     AZURE_OPENAI_API_KEY: SecretStr | None = None
     AZURE_OPENAI_ENDPOINT: str | None = None

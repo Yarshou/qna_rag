@@ -1,14 +1,10 @@
 import logging
 import re
 
+from app.config import settings
 from app.guardrails.exceptions import GuardrailViolationError
 
 logger = logging.getLogger(__name__)
-
-# Structural upper bound.  A legitimate QnA answer will not approach this
-# length; a response that does is most likely a runaway generation or a
-# sign that the model is repeating KB content verbatim instead of answering.
-_MAX_RESPONSE_LENGTH = 8_000
 
 # Patterns that should never appear in the *text* of a model response for
 # this system.  Their presence means the model has leaked internal tool
@@ -45,6 +41,7 @@ class OutputGuard:
     can be measured structurally and with near-zero false-positive rate:
 
     1. Maximum response length  — catches runaway generation.
+       Configurable via MAX_OUTPUT_LENGTH (default: 8 000 chars).
     2. Internal leakage         — catches tool function-call syntax appearing
                                   in the response text, which reliably signals
                                   broken role separation.
@@ -55,6 +52,11 @@ class OutputGuard:
     a warning.  This surfaces in structured logs without blocking valid
     responses, and provides the data needed to tune the system prompt over time.
     """
+
+    def __init__(self, max_response_length: int | None = None) -> None:
+        self._max_response_length = (
+            max_response_length if max_response_length is not None else settings.MAX_OUTPUT_LENGTH
+        )
 
     def check(self, content: str, tool_calls_executed: int = 0) -> str:
         self._check_length(content)
@@ -67,9 +69,9 @@ class OutputGuard:
     # ------------------------------------------------------------------
 
     def _check_length(self, content: str) -> None:
-        if len(content) > _MAX_RESPONSE_LENGTH:
+        if len(content) > self._max_response_length:
             raise GuardrailViolationError(
-                f"Assistant response exceeds the maximum allowed length of {_MAX_RESPONSE_LENGTH} characters."
+                f"Assistant response exceeds the maximum allowed length of {self._max_response_length} characters."
             )
 
     def _check_leakage(self, content: str) -> None:
