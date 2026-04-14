@@ -1,22 +1,16 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from app.schemas.base import BaseSchema
 
 
-class ErrorDetail(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ErrorDetail(BaseSchema):
     code: str
     message: str
 
 
-class ErrorResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ErrorResponse(BaseSchema):
     error: ErrorDetail
 
 
-class StatusResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class StatusResponse(BaseSchema):
     status: Literal["ok"]

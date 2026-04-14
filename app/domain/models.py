@@ -1,3 +1,18 @@
+"""Core domain entities shared across repository and service boundaries.
+
+Each entity follows the same two-method contract:
+
+* ``from_mapping(data)`` — factory that builds a typed entity from a raw
+  ``dict`` (typically an ``aiosqlite.Row`` cast to a mapping).  String
+  coercions like ``str(data["id"])`` are intentionally defensive: SQLite
+  can return integer row IDs even when the column is declared TEXT, and
+  the coercion keeps the domain layer free of database-type surprises.
+
+* ``to_dict()`` — serialises the entity to a plain ``dict`` with stable
+  string representations (ISO 8601 for timestamps, ``.value`` for enums).
+  Used when passing domain objects to the repository write path or logging.
+"""
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any

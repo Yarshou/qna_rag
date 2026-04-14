@@ -1,12 +1,10 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from app.schemas.base import BaseSchema
 
 
-class EventResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class EventResponse(BaseSchema):
     id: str
     chat_id: str
     event_type: str
@@ -14,7 +12,5 @@ class EventResponse(BaseModel):
     created_at: datetime
 
 
-class EventListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class EventListResponse(BaseSchema):
     items: list[EventResponse]

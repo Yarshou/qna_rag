@@ -1,11 +1,11 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import field_validator
+
+from app.schemas.base import BaseSchema
 
 
-class CreateChatRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class CreateChatRequest(BaseSchema):
     title: str | None = None
 
     @field_validator("title")
@@ -17,18 +17,14 @@ class CreateChatRequest(BaseModel):
         return normalized or None
 
 
-class ChatResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ChatResponse(BaseSchema):
     id: str
     title: str | None
     status: str
     created_at: datetime
 
 
-class ChatListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class ChatListResponse(BaseSchema):
     items: list[ChatResponse]
     total: int
     limit: int

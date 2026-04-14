@@ -1,12 +1,12 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import field_validator
+
+from app.schemas.base import BaseSchema
 
 
-class PostMessageRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class PostMessageRequest(BaseSchema):
     content: str
 
     @field_validator("content")
@@ -14,13 +14,11 @@ class PostMessageRequest(BaseModel):
     def validate_content(cls, value: str) -> str:
         normalized = value.strip()
         if not normalized:
-            raise ValueError("Message content must not be empty.")
+            raise ValueError("Message content is required.")
         return normalized
 
 
-class MessageResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class MessageResponse(BaseSchema):
     id: str
     chat_id: str
     role: str
@@ -29,18 +27,14 @@ class MessageResponse(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
-class MessageListResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class MessageListResponse(BaseSchema):
     items: list[MessageResponse]
     total: int
     limit: int
     offset: int
 
 
-class PostMessageResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class PostMessageResponse(BaseSchema):
     chat_id: str
     user_message: MessageResponse
     assistant_message: MessageResponse
