@@ -54,9 +54,7 @@ class OutputGuard:
     """
 
     def __init__(self, max_response_length: int | None = None) -> None:
-        self._max_response_length = (
-            max_response_length if max_response_length is not None else settings.MAX_OUTPUT_LENGTH
-        )
+        self._max_response_length = max_response_length if max_response_length is not None else settings.MAX_OUTPUT_LENGTH
 
     def check(self, content: str, tool_calls_executed: int = 0) -> str:
         self._check_length(content)

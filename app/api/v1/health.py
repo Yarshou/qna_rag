@@ -39,7 +39,6 @@ async def healthz() -> StatusResponse:
     return StatusResponse(status="ok")
 
 
-
 @router.get("/readyz", response_model=StatusResponse, responses=ERROR_RESPONSES)
 async def readyz() -> StatusResponse | JSONResponse:
     """Readiness probe — confirms the service can accept traffic.

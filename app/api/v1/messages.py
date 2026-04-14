@@ -59,7 +59,9 @@ async def list_messages(
     except Exception:
         return _error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error", "Failed to list messages.")
 
-    return MessageListResponse(items=[_message_to_response(message) for message in messages], total=total, limit=limit, offset=offset)
+    return MessageListResponse(
+        items=[_message_to_response(message) for message in messages], total=total, limit=limit, offset=offset
+    )
 
 
 @router.post(

@@ -35,9 +35,7 @@ class KnowledgeLoader:
         self._knowledge_base_dir = Path(knowledge_base_dir).expanduser().resolve()
         self._supported_extensions = tuple(extension.lower() for extension in supported_extensions)
         self._max_file_size_bytes = (
-            max_file_size_bytes
-            if max_file_size_bytes is not None
-            else settings.KNOWLEDGE_MAX_FILE_SIZE_MB * 1024 * 1024
+            max_file_size_bytes if max_file_size_bytes is not None else settings.KNOWLEDGE_MAX_FILE_SIZE_MB * 1024 * 1024
         )
         self._validate_knowledge_base_dir()
 

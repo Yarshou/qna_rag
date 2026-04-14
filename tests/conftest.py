@@ -4,7 +4,6 @@ import os
 
 import pytest
 
-
 # The application settings are instantiated at import time. Provide stable
 # defaults for tests that do not care about runtime environment configuration.
 os.environ.setdefault("DEBUG", "false")

@@ -68,7 +68,9 @@ class MessageService:
         self._tool_executor = tool_executor or self._build_tool_executor()
         self._input_guard = input_guard or InputGuard()
         self._output_guard = output_guard or OutputGuard()
-        self._max_tool_round_trips = max_tool_round_trips if max_tool_round_trips is not None else settings.MAX_TOOL_ROUND_TRIPS
+        self._max_tool_round_trips = (
+            max_tool_round_trips if max_tool_round_trips is not None else settings.MAX_TOOL_ROUND_TRIPS
+        )
 
     async def list_messages(self, chat_id: str, *, limit: int = 50, offset: int = 0) -> tuple[list[Message], int]:
         await self._ensure_chat_exists(chat_id)
