@@ -11,6 +11,7 @@ from app.knowledge import KnowledgeLoader, KnowledgeRetriever
 from app.llm import (
     AzureOpenAIChatClient,
     LLMProviderError,
+    ToolExecutionContext,
     ToolExecutor,
     build_chat_messages,
     get_knowledge_base_tools,
@@ -93,7 +94,6 @@ class MessageService:
             prior_history = self._exclude_current_user_message(history=history, user_message=user_message)
             provider_messages = build_chat_messages(history=prior_history, user_message=user_message)
 
-            self._tool_executor.reset_context_limits()
             self._input_guard.check(content)
             assistant_content, tool_calls_executed, used_knowledge_files = await self._run_agent_flow(
                 chat_id=chat_id,
@@ -156,6 +156,7 @@ class MessageService:
         tools = get_knowledge_base_tools()
         tool_calls_executed = 0
         used_knowledge_files: list[str] = []
+        tool_ctx = ToolExecutionContext()
 
         for _ in range(self._max_tool_round_trips):
             logger.info(
@@ -178,7 +179,7 @@ class MessageService:
             for tool_call in tool_calls:
                 tool_name = getattr(getattr(tool_call, "function", None), "name", None)
                 arguments = getattr(getattr(tool_call, "function", None), "arguments", None)
-                tool_result = self._tool_executor.execute_tool_call(tool_name, arguments)
+                tool_result = self._tool_executor.execute_tool_call(tool_name, arguments, tool_ctx)
                 tool_message = self._build_tool_message(tool_call=tool_call, tool_name=tool_name, tool_result=tool_result)
                 conversation.append(tool_message)
                 tool_calls_executed += 1

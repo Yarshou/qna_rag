@@ -5,7 +5,7 @@ import pytest
 from app.knowledge import MAX_KNOWLEDGE_FILES_IN_CONTEXT
 from app.knowledge.models import KnowledgeDocument, KnowledgeSearchHit, KnowledgeSearchResult
 from app.llm.exceptions import InvalidToolArgumentsError
-from app.llm.tool_executor import ToolExecutor
+from app.llm.tool_executor import ToolExecutionContext, ToolExecutor
 
 FIXED_UPDATED_AT = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -53,30 +53,33 @@ class FakeKnowledgeAccess:
 
 def test_read_requires_prior_search() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
+    ctx = ToolExecutionContext()
 
     with pytest.raises(InvalidToolArgumentsError, match="prior successful search_knowledge_base"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"})
+        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
 
 
 def test_read_rejects_file_not_returned_by_last_search() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
+    ctx = ToolExecutionContext()
 
-    executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2})
+    executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx)
 
     with pytest.raises(InvalidToolArgumentsError, match="last successful search_knowledge_base"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"})
+        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx)
 
 
 def test_new_search_replaces_previous_allowed_file_ids() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
+    ctx = ToolExecutionContext()
 
-    executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2})
-    executor.execute_tool_call("search_knowledge_base", {"query": "beta", "limit": 1})
+    executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx)
+    executor.execute_tool_call("search_knowledge_base", {"query": "beta", "limit": 1}, ctx)
 
     with pytest.raises(InvalidToolArgumentsError, match="last successful search_knowledge_base"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"})
+        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
 
-    result = executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"})
+    result = executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx)
 
     assert result["found"] is True
     assert result["document"]["id"] == "file-c"
@@ -84,9 +87,10 @@ def test_new_search_replaces_previous_allowed_file_ids() -> None:
 
 def test_search_then_read_succeeds() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
+    ctx = ToolExecutionContext()
 
-    search_result = executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2})
-    read_result = executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"})
+    search_result = executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx)
+    read_result = executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
 
     assert [hit["file_id"] for hit in search_result["hits"]] == ["file-a", "file-b"]
     assert read_result["found"] is True
@@ -96,58 +100,89 @@ def test_search_then_read_succeeds() -> None:
 
 def test_read_limit_is_preserved() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
+    ctx = ToolExecutionContext()
 
-    executor.execute_tool_call("search_knowledge_base", {"query": "all", "limit": 3})
-    executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"})
-    executor.execute_tool_call("read_knowledge_file", {"file_id": "file-b"})
+    executor.execute_tool_call("search_knowledge_base", {"query": "all", "limit": 3}, ctx)
+    executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
+    executor.execute_tool_call("read_knowledge_file", {"file_id": "file-b"}, ctx)
 
     with pytest.raises(InvalidToolArgumentsError, match=f"limited to {MAX_KNOWLEDGE_FILES_IN_CONTEXT}"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"})
+        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx)
 
 
-def test_reset_context_limits_clears_allowed_file_ids() -> None:
+def test_fresh_context_has_no_allowed_file_ids() -> None:
+    """A new ToolExecutionContext starts clean — read must not be allowed without prior search."""
     executor = ToolExecutor(FakeKnowledgeAccess())
 
-    executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2})
-    executor.reset_context_limits()
+    # First flow: search + read
+    ctx_a = ToolExecutionContext()
+    executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx_a)
+    executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_a)
 
+    # Second flow: fresh context — prior search from ctx_a must not bleed in
+    ctx_b = ToolExecutionContext()
     with pytest.raises(InvalidToolArgumentsError, match="prior successful search_knowledge_base"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"})
+        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_b)
+
+
+def test_two_concurrent_contexts_are_isolated() -> None:
+    """Two ToolExecutionContext instances on the same executor must not share state."""
+    executor = ToolExecutor(FakeKnowledgeAccess())
+
+    ctx_a = ToolExecutionContext()
+    ctx_b = ToolExecutionContext()
+
+    # ctx_a searches for "alpha" → file-a, file-b allowed
+    executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx_a)
+
+    # ctx_b searches for "beta" → only file-c allowed
+    executor.execute_tool_call("search_knowledge_base", {"query": "beta", "limit": 1}, ctx_b)
+
+    # ctx_a should still allow file-a (not file-c)
+    result_a = executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_a)
+    assert result_a["found"] is True
+
+    with pytest.raises(InvalidToolArgumentsError, match="last successful search_knowledge_base"):
+        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_b)
+
+    # ctx_b should allow file-c (from its own search)
+    result_b = executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx_b)
+    assert result_b["found"] is True
 
 
 def test_search_with_empty_query_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="non-empty string query"):
-        executor.execute_tool_call("search_knowledge_base", {"query": ""})
+        executor.execute_tool_call("search_knowledge_base", {"query": ""}, ToolExecutionContext())
 
 
 def test_search_with_whitespace_query_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="non-empty string query"):
-        executor.execute_tool_call("search_knowledge_base", {"query": "   "})
+        executor.execute_tool_call("search_knowledge_base", {"query": "   "}, ToolExecutionContext())
 
 
 def test_search_with_missing_query_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="non-empty string query"):
-        executor.execute_tool_call("search_knowledge_base", {})
+        executor.execute_tool_call("search_knowledge_base", {}, ToolExecutionContext())
 
 
 def test_search_with_non_integer_limit_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="limit must be an integer"):
-        executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": "five"})
+        executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": "five"}, ToolExecutionContext())
 
 
 def test_search_with_zero_limit_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="limit must be at least"):
-        executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 0})
+        executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 0}, ToolExecutionContext())
 
 
 def test_search_with_json_string_arguments() -> None:
@@ -155,7 +190,9 @@ def test_search_with_json_string_arguments() -> None:
     import json
 
     executor = ToolExecutor(FakeKnowledgeAccess())
-    result = executor.execute_tool_call("search_knowledge_base", json.dumps({"query": "alpha", "limit": 1}))
+    result = executor.execute_tool_call(
+        "search_knowledge_base", json.dumps({"query": "alpha", "limit": 1}), ToolExecutionContext()
+    )
 
     assert len(result["hits"]) == 1
     assert result["hits"][0]["file_id"] == "file-a"
@@ -165,34 +202,33 @@ def test_search_with_invalid_json_string_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="valid JSON"):
-        executor.execute_tool_call("search_knowledge_base", "{bad json}")
+        executor.execute_tool_call("search_knowledge_base", "{bad json}", ToolExecutionContext())
 
 
 def test_read_with_empty_file_id_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
-    executor.execute_tool_call("search_knowledge_base", {"query": "alpha"})
+    ctx = ToolExecutionContext()
+    executor.execute_tool_call("search_knowledge_base", {"query": "alpha"}, ctx)
 
     with pytest.raises(InvalidToolArgumentsError, match="non-empty string file_id"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": ""})
+        executor.execute_tool_call("read_knowledge_file", {"file_id": ""}, ctx)
 
 
 def test_read_with_whitespace_file_id_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
-    executor.execute_tool_call("search_knowledge_base", {"query": "alpha"})
+    ctx = ToolExecutionContext()
+    executor.execute_tool_call("search_knowledge_base", {"query": "alpha"}, ctx)
 
     with pytest.raises(InvalidToolArgumentsError, match="non-empty string file_id"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "   "})
+        executor.execute_tool_call("read_knowledge_file", {"file_id": "   "}, ctx)
 
 
 def test_read_missing_file_returns_not_found_payload() -> None:
     """read_knowledge_file for a valid but absent file must return found=False."""
     executor = ToolExecutor(FakeKnowledgeAccess())
-    # Search returns file-a and file-b; use a file_id that exists in the
-    # allowlist but not in the fake document store.
-    executor._allowed_file_ids = {"nonexistent-file"}  # bypass allowlist check
-    executor._full_file_reads = 0
+    ctx = ToolExecutionContext(allowed_file_ids={"nonexistent-file"})
 
-    result = executor.execute_tool_call("read_knowledge_file", {"file_id": "nonexistent-file"})
+    result = executor.execute_tool_call("read_knowledge_file", {"file_id": "nonexistent-file"}, ctx)
 
     assert result["found"] is False
     assert result["content"] is None
@@ -204,7 +240,7 @@ def test_unsupported_tool_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(UnsupportedToolError, match="Unsupported tool"):
-        executor.execute_tool_call("delete_all_files", {})
+        executor.execute_tool_call("delete_all_files", {}, ToolExecutionContext())
 
 
 def test_execute_tool_calls_returns_tool_messages() -> None:
@@ -228,7 +264,7 @@ def test_execute_tool_calls_returns_tool_messages() -> None:
 
     tool_calls = [_FakeToolCall("call-1", "search_knowledge_base", json.dumps({"query": "alpha", "limit": 2}))]
 
-    messages = executor.execute_tool_calls(tool_calls)
+    messages = executor.execute_tool_calls(tool_calls, ToolExecutionContext())
 
     assert len(messages) == 1
     msg = messages[0]
