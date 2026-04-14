@@ -1,6 +1,5 @@
 import contextlib
 import logging
-from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI
 
@@ -14,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextlib.asynccontextmanager
-async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(application: FastAPI):
     await initialize_database(db_path=resolve_database_path())
 
     # Build the knowledge index once at startup so that search queries read

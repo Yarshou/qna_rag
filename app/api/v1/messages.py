@@ -6,7 +6,13 @@ from fastapi.responses import JSONResponse
 from app.domain import Message
 from app.guardrails import GuardrailViolationError
 from app.knowledge import KnowledgeIndexer, KnowledgeRetriever
-from app.llm import InvalidToolArgumentsError, LLMClientConfigurationError, LLMProviderError, ToolExecutor, UnsupportedToolError
+from app.llm import (
+    InvalidToolArgumentsError,
+    LLMClientConfigurationError,
+    LLMProviderError,
+    ToolExecutor,
+    UnsupportedToolError,
+)
 from app.schemas.common import ErrorResponse
 from app.schemas.messages import MessageListResponse, MessageResponse, PostMessageRequest, PostMessageResponse
 from app.services import ChatNotFoundError, MessageProcessingError, MessageService
