@@ -3,13 +3,12 @@ from uuid import uuid4
 
 import aiosqlite
 
-from app.db.connection import ConnectionFactory, DatabaseError, build_connection_factory
+from app.repositories.base import BaseRepository
 from app.repositories.utils import deserialize_json, serialize_json, utcnow
 
 
-class MessagesRepository:
-    def __init__(self, connection_factory: ConnectionFactory | None = None) -> None:
-        self._connection_factory = connection_factory or build_connection_factory()
+class MessagesRepository(BaseRepository):
+    _entity = "message"
 
     async def create_message(
         self,
@@ -117,39 +116,3 @@ class MessagesRepository:
             "created_at": row["created_at"],
             "metadata": deserialize_json(row["metadata_json"]),
         }
-
-    async def _fetch_all(
-        self,
-        *,
-        query: str,
-        parameters: tuple[object, ...],
-        connection: aiosqlite.Connection | None,
-    ) -> list[aiosqlite.Row]:
-        managed_connection = connection is None
-        active_connection = connection or await self._connection_factory()
-        try:
-            async with active_connection.execute(query, parameters) as cursor:
-                return await cursor.fetchall()
-        except aiosqlite.Error as exc:
-            raise DatabaseError("Failed to fetch message rows.") from exc
-        finally:
-            if managed_connection:
-                await active_connection.close()
-
-    async def _execute_write(
-        self,
-        *,
-        query: str,
-        parameters: Mapping[str, object],
-        connection: aiosqlite.Connection | None,
-    ) -> None:
-        managed_connection = connection is None
-        active_connection = connection or await self._connection_factory()
-        try:
-            await active_connection.execute(query, parameters)
-            await active_connection.commit()
-        except aiosqlite.Error as exc:
-            raise DatabaseError("Failed to write message row.") from exc
-        finally:
-            if managed_connection:
-                await active_connection.close()
