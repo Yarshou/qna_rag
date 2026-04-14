@@ -1,10 +1,10 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import JSONResponse, Response
 
 from app.domain import Chat
-from app.schemas.chats import ChatListResponse, ChatResponse, CreateChatRequest, DeleteChatResponse
+from app.schemas.chats import ChatListResponse, ChatResponse, CreateChatRequest
 from app.schemas.common import ErrorResponse
 from app.services import ChatService
 
@@ -60,24 +60,26 @@ async def create_chat(
 )
 async def list_chats(
     service: Annotated[ChatService, Depends(get_chat_service)],
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ChatListResponse | JSONResponse:
     try:
-        chats = await service.list_chats()
+        chats, total = await service.list_chats(limit=limit, offset=offset)
     except Exception:
         return _error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error", "Failed to list chats.")
 
-    return ChatListResponse(items=[_chat_to_response(chat) for chat in chats])
+    return ChatListResponse(items=[_chat_to_response(chat) for chat in chats], total=total, limit=limit, offset=offset)
 
 
 @router.delete(
     "/{chat_id}",
-    response_model=DeleteChatResponse,
-    responses=ERROR_RESPONSES,
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={**ERROR_RESPONSES, 204: {"description": "Chat deleted."}},
 )
 async def delete_chat(
     chat_id: str,
     service: Annotated[ChatService, Depends(get_chat_service)],
-) -> DeleteChatResponse | JSONResponse:
+) -> Response:
     try:
         deleted = await service.delete_chat(chat_id)
     except Exception:
@@ -86,4 +88,4 @@ async def delete_chat(
     if not deleted:
         return _error_response(status.HTTP_404_NOT_FOUND, "chat_not_found", f"Chat '{chat_id}' was not found.")
 
-    return DeleteChatResponse(id=chat_id, deleted=True)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

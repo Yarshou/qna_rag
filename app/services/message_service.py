@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from collections.abc import Mapping
@@ -69,9 +70,13 @@ class MessageService:
         self._output_guard = output_guard or OutputGuard()
         self._max_tool_round_trips = max_tool_round_trips
 
-    async def list_messages(self, chat_id: str) -> list[Message]:
+    async def list_messages(self, chat_id: str, *, limit: int = 50, offset: int = 0) -> tuple[list[Message], int]:
         await self._ensure_chat_exists(chat_id)
-        return await self._context_service.get_chat_history(chat_id)
+        rows, total = await asyncio.gather(
+            self._messages_repository.list_messages(chat_id, limit=limit, offset=offset),
+            self._messages_repository.count_messages(chat_id),
+        )
+        return [Message.from_mapping(row) for row in rows], total
 
     async def post_user_message(self, chat_id: str, content: str) -> MessageProcessingResult:
         await self._ensure_chat_exists(chat_id)

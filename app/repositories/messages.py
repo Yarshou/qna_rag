@@ -53,6 +53,16 @@ class MessagesRepository:
             connection=connection,
         )
 
+    async def count_messages(
+        self,
+        chat_id: str,
+        *,
+        connection: aiosqlite.Connection | None = None,
+    ) -> int:
+        query = "SELECT COUNT(*) FROM messages WHERE chat_id = ?"
+        row = await self._fetch_one(query=query, parameters=(chat_id,), connection=connection)
+        return int(row[0]) if row is not None else 0
+
     async def list_messages_ordered(
         self,
         chat_id: str,

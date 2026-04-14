@@ -136,9 +136,10 @@ async def test_rag_persists_user_and_assistant_messages(rag_db_path: Path) -> No
     chat = await chat_service.create_chat(title="Persistence check")
     await message_service.post_user_message(chat.id, "Tell me about Python basics.")
 
-    history = await message_service.list_messages(chat.id)
+    history, total = await message_service.list_messages(chat.id)
 
-    assert len(history) == 2, f"Expected 2 messages in history; got {len(history)}"
+    assert total == 2, f"Expected total=2 messages in history; got {total}"
+    assert len(history) == 2, f"Expected 2 paginated messages in history; got {len(history)}"
     roles = [m.role.value for m in history]
     assert "user" in roles
     assert "assistant" in roles
@@ -155,8 +156,9 @@ async def test_rag_maintains_conversation_context_across_turns(rag_db_path: Path
     second_result = await message_service.post_user_message(chat.id, "Can you summarise what you just told me?")
 
     assert second_result.assistant_message.content.strip(), "Second-turn response was empty"
-    history = await message_service.list_messages(chat.id)
-    assert len(history) == 4, f"Expected 4 messages after two turns; got {len(history)}"
+    history, total = await message_service.list_messages(chat.id)
+    assert total == 4, f"Expected total=4 messages after two turns; got {total}"
+    assert len(history) == 4, f"Expected 4 paginated messages after two turns; got {len(history)}"
 
 
 @pytest.mark.anyio

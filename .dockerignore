@@ -11,6 +11,11 @@ __pycache__/
 *.pyd
 tests/
 docs/
+k8s/
+Makefile
 AGENTS.md
-app/envs/.env
+*.md
+!README.md
+.dockerignore
+app/envs/
 app/data/

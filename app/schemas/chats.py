@@ -30,10 +30,6 @@ class ChatListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[ChatResponse]
-
-
-class DeleteChatResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    id: str
-    deleted: bool
+    total: int
+    limit: int
+    offset: int

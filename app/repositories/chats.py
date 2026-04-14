@@ -61,6 +61,15 @@ class ChatsRepository:
         )
         return [dict(row) for row in rows]
 
+    async def count_chats(
+        self,
+        *,
+        connection: aiosqlite.Connection | None = None,
+    ) -> int:
+        query = "SELECT COUNT(*) FROM chats"
+        row = await self._fetch_one(query=query, parameters=(), connection=connection)
+        return int(row[0]) if row is not None else 0
+
     async def get_chat(
         self,
         chat_id: str,

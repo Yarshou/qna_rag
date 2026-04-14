@@ -28,8 +28,8 @@ class _FakeChatServiceMissing:
             created_at=datetime(2026, 4, 7, 10, 0, tzinfo=UTC),
         )
 
-    async def list_chats(self) -> list[Chat]:
-        return []
+    async def list_chats(self, *, limit: int = 50, offset: int = 0) -> tuple[list[Chat], int]:
+        return [], 0
 
     async def get_chat(self, chat_id: str) -> Chat | None:
         return None
@@ -44,7 +44,7 @@ class _FakeChatServiceBroken:
     async def create_chat(self, title: str | None = None) -> Chat:
         raise RuntimeError("DB connection failed")
 
-    async def list_chats(self) -> list[Chat]:
+    async def list_chats(self, *, limit: int = 50, offset: int = 0) -> tuple[list[Chat], int]:
         raise RuntimeError("DB connection failed")
 
     async def get_chat(self, chat_id: str) -> Chat | None:
@@ -60,7 +60,7 @@ class _FakeMessageServiceRaises:
     def __init__(self, error: Exception) -> None:
         self._error = error
 
-    async def list_messages(self, chat_id: str) -> list[Message]:
+    async def list_messages(self, chat_id: str, *, limit: int = 50, offset: int = 0) -> tuple[list[Message], int]:
         raise ChatNotFoundError(f"Chat '{chat_id}' was not found.")
 
     async def post_user_message(self, chat_id: str, content: str) -> MessageProcessingResult:

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from app.domain import Chat
@@ -18,10 +19,14 @@ class ChatService:
         logger.info("chat_create_completed", extra={"chat_id": chat.id})
         return chat
 
-    async def list_chats(self) -> list[Chat]:
-        chats = [Chat.from_mapping(chat) for chat in await self._chats_repository.list_chats()]
-        logger.info("chat_list_completed", extra={"count": len(chats)})
-        return chats
+    async def list_chats(self, *, limit: int = 50, offset: int = 0) -> tuple[list[Chat], int]:
+        chats, total = await asyncio.gather(
+            self._chats_repository.list_chats(limit=limit, offset=offset),
+            self._chats_repository.count_chats(),
+        )
+        result = [Chat.from_mapping(chat) for chat in chats]
+        logger.info("chat_list_completed", extra={"count": len(result), "total": total})
+        return result, total
 
     async def get_chat(self, chat_id: str) -> Chat | None:
         chat = await self._chats_repository.get_chat(chat_id)

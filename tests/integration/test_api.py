@@ -16,8 +16,9 @@ class FakeChatService:
     async def create_chat(self, title: str | None = None) -> Chat:
         return replace(self._chat, title=title)
 
-    async def list_chats(self) -> list[Chat]:
-        return [] if self._chat is None else [self._chat]
+    async def list_chats(self, *, limit: int = 50, offset: int = 0) -> tuple[list[Chat], int]:
+        items = [] if self._chat is None else [self._chat]
+        return items, len(items)
 
     async def get_chat(self, chat_id: str) -> Chat | None:
         if self._chat is None or self._chat.id != chat_id:
@@ -33,10 +34,10 @@ class FakeMessageService:
         self._messages = messages
         self._processing_result = processing_result
 
-    async def list_messages(self, chat_id: str) -> list[Message]:
+    async def list_messages(self, chat_id: str, *, limit: int = 50, offset: int = 0) -> tuple[list[Message], int]:
         if chat_id != self._processing_result.chat_id:
             raise ChatNotFoundError(f"Chat '{chat_id}' was not found.")
-        return self._messages
+        return self._messages, len(self._messages)
 
     async def post_user_message(self, chat_id: str, content: str) -> MessageProcessingResult:
         if chat_id != self._processing_result.chat_id:
@@ -148,8 +149,8 @@ def test_chat_routes(client: TestClient, sample_chat: Chat) -> None:
     assert list_response.json()["items"][0]["id"] == sample_chat.id
 
     delete_response = client.delete(f"/api/v1/chats/{sample_chat.id}")
-    assert delete_response.status_code == 200
-    assert delete_response.json() == {"id": sample_chat.id, "deleted": True}
+    assert delete_response.status_code == 204
+    assert delete_response.content == b""
 
 
 def test_message_routes(
@@ -170,7 +171,7 @@ def test_message_routes(
         f"/api/v1/chats/{sample_chat.id}/messages",
         json={"content": "  Tell me more  "},
     )
-    assert post_response.status_code == 200
+    assert post_response.status_code == 201
     assert post_response.json()["assistant_message"]["id"] == "msg-2"
     assert post_response.json()["used_knowledge_files"] == ["kb-1"]
 

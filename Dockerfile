@@ -1,4 +1,4 @@
-FROM python:3.13.12-slim AS builder
+FROM python:3.13.12-slim@sha256:f1927c75e81efd1e091dbd64b6c0ecaa5630b38635a3d1c04034ac636e1f94c8 AS builder
 
 ENV POETRY_VERSION=2.3.1 \
     POETRY_VIRTUALENVS_IN_PROJECT=true \
@@ -14,7 +14,7 @@ COPY pyproject.toml poetry.lock README.md ./
 RUN poetry install --only main --no-root
 
 
-FROM python:3.13.12-slim AS runtime
+FROM python:3.13.12-slim@sha256:f1927c75e81efd1e091dbd64b6c0ecaa5630b38635a3d1c04034ac636e1f94c8 AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -36,4 +36,8 @@ USER app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.config.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD exec gunicorn app.config.app:app \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:8000 \
+    --workers "${APP_WORKERS:-1}" \
+    --timeout 120

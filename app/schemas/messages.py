@@ -33,6 +33,9 @@ class MessageListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[MessageResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 class PostMessageResponse(BaseModel):

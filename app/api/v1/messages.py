@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 
 from app.domain import Message
@@ -49,21 +49,24 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
 async def list_messages(
     chat_id: str,
     service: Annotated[MessageService, Depends(get_message_service)],
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> MessageListResponse | JSONResponse:
     try:
-        messages = await service.list_messages(chat_id)
+        messages, total = await service.list_messages(chat_id, limit=limit, offset=offset)
     except ChatNotFoundError as exc:
         return _error_response(status.HTTP_404_NOT_FOUND, "chat_not_found", str(exc))
     except Exception:
         return _error_response(status.HTTP_500_INTERNAL_SERVER_ERROR, "internal_error", "Failed to list messages.")
 
-    return MessageListResponse(items=[_message_to_response(message) for message in messages])
+    return MessageListResponse(items=[_message_to_response(message) for message in messages], total=total, limit=limit, offset=offset)
 
 
 @router.post(
     "/chats/{chat_id}/messages",
     response_model=PostMessageResponse,
     response_model_exclude_none=True,
+    status_code=status.HTTP_201_CREATED,
     responses=ERROR_RESPONSES,
 )
 async def post_message(
