@@ -1,11 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.domain import Message
 from app.guardrails import GuardrailViolationError
-from app.llm import InvalidToolArgumentsError, LLMClientConfigurationError, LLMProviderError, UnsupportedToolError
+from app.knowledge import KnowledgeIndexer, KnowledgeRetriever
+from app.llm import InvalidToolArgumentsError, LLMClientConfigurationError, LLMProviderError, ToolExecutor, UnsupportedToolError
 from app.schemas.common import ErrorResponse
 from app.schemas.messages import MessageListResponse, MessageResponse, PostMessageRequest, PostMessageResponse
 from app.services import ChatNotFoundError, MessageProcessingError, MessageService
@@ -21,8 +22,13 @@ ERROR_RESPONSES = {
 }
 
 
-def get_message_service() -> MessageService:
-    return MessageService()
+def get_message_service(request: Request) -> MessageService:
+    # Use the knowledge indexer that was built once at application startup
+    # (see app/config/app.py lifespan).  If KNOWLEDGE_DIR was not configured,
+    # the indexer is None and MessageService will raise on the first tool call.
+    indexer: KnowledgeIndexer | None = getattr(request.app.state, "knowledge_indexer", None)
+    tool_executor = ToolExecutor(KnowledgeRetriever(indexer)) if indexer is not None else None
+    return MessageService(tool_executor=tool_executor)
 
 
 def _message_to_response(message: Message) -> MessageResponse:
