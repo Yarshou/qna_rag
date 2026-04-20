@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from app.common_types import Chat, ChatStatus, EventType, Message, MessageRole
+from app.shared_types import Chat, ChatStatus, EventType, Message, MessageRole
 from app.guardrails.exceptions import GuardrailViolationError
 from app.llm.exceptions import LLMProviderError
 from app.services.message_service import (

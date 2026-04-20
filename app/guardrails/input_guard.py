@@ -32,7 +32,7 @@ class InputGuard:
     2. Injection patterns — a deny-list of well-known prompt-injection
        phrases caught before the model ever sees the message.
 
-    Neither check attempts to reason about intent or common_types; both operate
+    Neither check attempts to reason about intent or shared_types; both operate
     on objective, measurable properties of the text.
     """
 

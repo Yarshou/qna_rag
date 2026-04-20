@@ -1,4 +1,4 @@
-from app.common_types import Message
+from app.shared_types import Message
 from app.repositories.messages import MessagesRepository
 
 

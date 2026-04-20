@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 import pytest
 from starlette.testclient import TestClient
 
-from app.common_types import Chat, ChatEvent, ChatStatus, EventType, Message, MessageRole
+from app.shared_types import Chat, ChatEvent, ChatStatus, EventType, Message, MessageRole
 from app.config.app import app
 from app.services import ChatNotFoundError, MessageProcessingResult
 

@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse, Response
 
-from app.common_types import Chat
+from app.shared_types import Chat
 from app.schemas.chats import ChatListResponse, ChatResponse, CreateChatRequest
 from app.schemas.common import ErrorResponse
 from app.services import ChatService

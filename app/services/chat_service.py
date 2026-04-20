@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from app.common_types import Chat
+from app.shared_types import Chat
 from app.repositories.chats import ChatsRepository
 
 logger = logging.getLogger(__name__)

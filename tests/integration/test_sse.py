@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.v1 import events as events_api
-from app.common_types import ChatStatus, EventType
+from app.shared_types import ChatStatus, EventType
 from app.config import settings
 from app.config.app import app
 from app.db.connection import build_connection_factory

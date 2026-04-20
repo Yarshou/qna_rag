@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from app.common_types import Chat, ChatEvent, Message
-from app.common_types.enums import ChatStatus, EventType, MessageRole
+from app.shared_types import Chat, ChatEvent, Message
+from app.shared_types.enums import ChatStatus, EventType, MessageRole
 from app.services.chat_service import ChatService
 from app.services.context_service import ContextService
 from app.services.notification_service import NotificationService

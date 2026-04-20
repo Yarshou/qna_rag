@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
-from app.common_types import Message
+from app.shared_types import Message
 from app.context import AppContext
 from app.guardrails import GuardrailViolationError
 from app.llm import (
