@@ -4,9 +4,9 @@ import pytest
 
 from app.db.connection import build_connection_factory
 from app.db.init import initialize_database
-from app.domain import ChatStatus, EventType
 from app.repositories.chats import ChatsRepository
 from app.repositories.events import EventsRepository
+from app.types import ChatStatus, EventType
 
 
 @pytest.mark.anyio

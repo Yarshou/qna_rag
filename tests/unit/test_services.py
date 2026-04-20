@@ -12,11 +12,11 @@ from typing import Any
 
 import pytest
 
-from app.domain import Chat, ChatEvent, Message
-from app.domain.enums import ChatStatus, EventType, MessageRole
 from app.services.chat_service import ChatService
 from app.services.context_service import ContextService
 from app.services.notification_service import NotificationService
+from app.types import Chat, ChatEvent, Message
+from app.types.enums import ChatStatus, EventType, MessageRole
 
 # ---------------------------------------------------------------------------
 # Shared helpers

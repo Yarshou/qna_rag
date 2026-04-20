@@ -329,16 +329,49 @@ The final answer may only be grounded on:
 The final model context must never contain more than 2 full KB files.
 The model also cannot read arbitrary files by guessing `file_id`; full reads are limited to the last retrieval result only.
 
-### 8.5 Retrieval Implementation Direction
+### 8.5 Retrieval Implementation
 
-For this assessment, file-level lexical retrieval is sufficient because:
+The retrieval pipeline uses **hybrid search**: a BM25 lexical signal combined with a cosine semantic signal, blended via a configurable weight `α = HYBRID_LEXICAL_WEIGHT` (default 0.5).
 
-- the KB is local and text-based
-- the implementation remains explainable
-- retrieval behavior is deterministic
-- full selected files are small enough to load when chosen
+#### Mode selection (automatic, based on store capabilities)
 
-The design intentionally avoids specialized orchestration frameworks and hidden retrieval abstractions.
+| Store | Corpus stats | Embeddings | Mode |
+|---|---|---|---|
+| `KnowledgeLoader` | ✗ | ✗ | Additive lexical (original) |
+| `KnowledgeIndexer` (no embeddings client) | ✓ | ✗ | BM25-only |
+| `KnowledgeIndexer` (with embeddings client) | ✓ | ✓ | Hybrid (BM25 + cosine) |
+
+#### Lexical: BM25
+
+- Term frequencies stored in `kb_terms` SQLite table at index time.
+- Corpus stats (N, avg\_dl, df) computed in memory after each `build_index()`.
+- BM25 formula: `IDF(t) × tf_norm(t,d)` with `k1=1.2`, `b=0.75`.
+
+#### Semantic: cosine similarity
+
+- Float32 embedding vectors stored in `kb_documents` SQLite table.
+- Query embedded at retrieval time via the same `OpenAIChatClient`.
+- Cosine implemented in pure Python; no numpy or external libraries.
+
+#### Fusion
+
+1. Filter candidates with `raw_lex > 0 OR raw_sem > 0`.
+2. Min-max normalise each signal over the filtered candidate set → `[0, 1]`.
+3. `fused = α × lex_norm + (1 − α) × sem_norm`.
+4. Sort descending; tie-break by `(filename ASC, id ASC)`.
+
+#### Embedding cache
+
+- Key: `(file_id, checksum, embedding_model)`.
+- Unchanged files reuse persisted blobs; the embeddings API is only called for new or modified documents.
+- Orphan rows (files removed from disk) are deleted on each `build_index()`.
+- Graceful degradation: if the API is unavailable at startup the indexer falls back to BM25-only mode with an error log.
+
+#### Sub-score observability
+
+`KnowledgeSearchHit` carries optional `lexical_score` and `semantic_score` fields (normalised values before blending). Both are logged via `knowledge_retrieval_hybrid_scored` for every query.
+
+The design stays within the existing constraints: SQLite only, no new dependencies, no vector stores, no orchestration frameworks.
 
 ---
 
@@ -389,6 +422,8 @@ SQLite stores durable state for the service.
 | `chats` | chat session identity and lifecycle |
 | `messages` | ordered user/assistant message history |
 | `chat_events` | durable lifecycle event history |
+| `kb_documents` | KB document metadata + float32 embedding blob |
+| `kb_terms` | per-document token frequencies for BM25 scoring |
 
 ### 10.2 Minimal Schema Direction
 

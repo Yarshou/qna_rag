@@ -1,6 +1,7 @@
 from pathlib import Path
+from typing import Annotated
 
-from pydantic import PositiveInt, SecretStr
+from pydantic import Field, PositiveInt, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +30,17 @@ class Settings(BaseSettings):
     # ── Knowledge base limits ─────────────────────────────────────────────────
     # Files larger than this threshold are skipped during KB indexing.
     KNOWLEDGE_MAX_FILE_SIZE_MB: PositiveInt = 10
+
+    # ── Hybrid retrieval ──────────────────────────────────────────────────────
+    # Set to False to disable semantic scoring and use lexical-only BM25.
+    HYBRID_ENABLED: bool = True
+    # OpenAI-compatible embedding model or Azure deployment name.
+    EMBEDDING_MODEL: str = "text-embedding-3-small-1"
+    # Number of documents to embed per API call (controls request size).
+    EMBEDDING_BATCH_SIZE: PositiveInt = 16
+    # Weight given to the lexical (BM25) score in the fused ranking.
+    # 1.0 = pure lexical, 0.0 = pure semantic, 0.5 = equal blend.
+    HYBRID_LEXICAL_WEIGHT: Annotated[float, Field(ge=0.0, le=1.0)] = 0.5
 
     # Azure OpenAI provider (active when AZURE_OPENAI_ENDPOINT is set)
     AZURE_OPENAI_API_KEY: SecretStr | None = None

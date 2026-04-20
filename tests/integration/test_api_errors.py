@@ -11,10 +11,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config.app import app
-from app.domain import Chat, ChatEvent, ChatStatus, Message
 from app.llm.exceptions import LLMClientConfigurationError, LLMProviderError
 from app.services import ChatNotFoundError, MessageProcessingError
 from app.services.message_service import MessageProcessingResult
+from app.types import Chat, ChatEvent, ChatStatus, Message
 
 
 class _FakeChatServiceMissing:

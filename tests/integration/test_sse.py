@@ -10,10 +10,10 @@ from app.config import settings
 from app.config.app import app
 from app.db.connection import build_connection_factory
 from app.db.init import initialize_database
-from app.domain import ChatStatus, EventType
 from app.repositories.chats import ChatsRepository
 from app.repositories.events import EventsRepository
 from app.services.notification_service import NotificationService
+from app.types import ChatStatus, EventType
 
 
 def _run(coroutine):

@@ -3,10 +3,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse, Response
 
-from app.domain import Chat
 from app.schemas.chats import ChatListResponse, ChatResponse, CreateChatRequest
 from app.schemas.common import ErrorResponse
 from app.services import ChatService
+from app.types import Chat
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 

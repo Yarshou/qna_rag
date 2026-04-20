@@ -23,7 +23,7 @@ class FakeKnowledgeAccess:
             "all": ["file-a", "file-b", "file-c"],
         }
 
-    def search_knowledge_base(self, query: str, limit: int = 5) -> KnowledgeSearchResult:
+    async def search_knowledge_base(self, query: str, limit: int = 5) -> KnowledgeSearchResult:
         file_ids = self._search_results.get(query, [])[:limit]
         hits = [
             KnowledgeSearchHit(
@@ -36,7 +36,7 @@ class FakeKnowledgeAccess:
         ]
         return KnowledgeSearchResult(query=query, hits=hits)
 
-    def read_knowledge_file(self, file_id: str) -> KnowledgeDocument | None:
+    async def read_knowledge_file(self, file_id: str) -> KnowledgeDocument | None:
         return self._documents.get(file_id)
 
     @staticmethod
@@ -51,46 +51,50 @@ class FakeKnowledgeAccess:
         )
 
 
-def test_read_requires_prior_search() -> None:
+@pytest.mark.anyio
+async def test_read_requires_prior_search() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
     ctx = ToolExecutionContext()
 
     with pytest.raises(InvalidToolArgumentsError, match="prior successful search_knowledge_base"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
+        await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
 
 
-def test_read_rejects_file_not_returned_by_last_search() -> None:
+@pytest.mark.anyio
+async def test_read_rejects_file_not_returned_by_last_search() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
     ctx = ToolExecutionContext()
 
-    executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx)
+    await executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx)
 
     with pytest.raises(InvalidToolArgumentsError, match="last successful search_knowledge_base"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx)
+        await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx)
 
 
-def test_new_search_replaces_previous_allowed_file_ids() -> None:
+@pytest.mark.anyio
+async def test_new_search_replaces_previous_allowed_file_ids() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
     ctx = ToolExecutionContext()
 
-    executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx)
-    executor.execute_tool_call("search_knowledge_base", {"query": "beta", "limit": 1}, ctx)
+    await executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx)
+    await executor.execute_tool_call("search_knowledge_base", {"query": "beta", "limit": 1}, ctx)
 
     with pytest.raises(InvalidToolArgumentsError, match="last successful search_knowledge_base"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
+        await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
 
-    result = executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx)
+    result = await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx)
 
     assert result["found"] is True
     assert result["document"]["id"] == "file-c"
 
 
-def test_search_then_read_succeeds() -> None:
+@pytest.mark.anyio
+async def test_search_then_read_succeeds() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
     ctx = ToolExecutionContext()
 
-    search_result = executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx)
-    read_result = executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
+    search_result = await executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx)
+    read_result = await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
 
     assert [hit["file_id"] for hit in search_result["hits"]] == ["file-a", "file-b"]
     assert read_result["found"] is True
@@ -98,99 +102,100 @@ def test_search_then_read_succeeds() -> None:
     assert read_result["document"]["content"] == "Alpha content"
 
 
-def test_read_limit_is_preserved() -> None:
+@pytest.mark.anyio
+async def test_read_limit_is_preserved() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
     ctx = ToolExecutionContext()
 
-    executor.execute_tool_call("search_knowledge_base", {"query": "all", "limit": 3}, ctx)
-    executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
-    executor.execute_tool_call("read_knowledge_file", {"file_id": "file-b"}, ctx)
+    await executor.execute_tool_call("search_knowledge_base", {"query": "all", "limit": 3}, ctx)
+    await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx)
+    await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-b"}, ctx)
 
     with pytest.raises(InvalidToolArgumentsError, match=f"limited to {MAX_KNOWLEDGE_FILES_IN_CONTEXT}"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx)
+        await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx)
 
 
-def test_fresh_context_has_no_allowed_file_ids() -> None:
-    """A new ToolExecutionContext starts clean — read must not be allowed without prior search."""
+@pytest.mark.anyio
+async def test_fresh_context_has_no_allowed_file_ids() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
-    # First flow: search + read
     ctx_a = ToolExecutionContext()
-    executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx_a)
-    executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_a)
+    await executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx_a)
+    await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_a)
 
-    # Second flow: fresh context — prior search from ctx_a must not bleed in
     ctx_b = ToolExecutionContext()
     with pytest.raises(InvalidToolArgumentsError, match="prior successful search_knowledge_base"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_b)
+        await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_b)
 
 
-def test_two_concurrent_contexts_are_isolated() -> None:
-    """Two ToolExecutionContext instances on the same executor must not share state."""
+@pytest.mark.anyio
+async def test_two_concurrent_contexts_are_isolated() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     ctx_a = ToolExecutionContext()
     ctx_b = ToolExecutionContext()
 
-    # ctx_a searches for "alpha" → file-a, file-b allowed
-    executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx_a)
+    await executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 2}, ctx_a)
+    await executor.execute_tool_call("search_knowledge_base", {"query": "beta", "limit": 1}, ctx_b)
 
-    # ctx_b searches for "beta" → only file-c allowed
-    executor.execute_tool_call("search_knowledge_base", {"query": "beta", "limit": 1}, ctx_b)
-
-    # ctx_a should still allow file-a (not file-c)
-    result_a = executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_a)
+    result_a = await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_a)
     assert result_a["found"] is True
 
     with pytest.raises(InvalidToolArgumentsError, match="last successful search_knowledge_base"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_b)
+        await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-a"}, ctx_b)
 
-    # ctx_b should allow file-c (from its own search)
-    result_b = executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx_b)
+    result_b = await executor.execute_tool_call("read_knowledge_file", {"file_id": "file-c"}, ctx_b)
     assert result_b["found"] is True
 
 
-def test_search_with_empty_query_raises_error() -> None:
+@pytest.mark.anyio
+async def test_search_with_empty_query_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="non-empty string query"):
-        executor.execute_tool_call("search_knowledge_base", {"query": ""}, ToolExecutionContext())
+        await executor.execute_tool_call("search_knowledge_base", {"query": ""}, ToolExecutionContext())
 
 
-def test_search_with_whitespace_query_raises_error() -> None:
+@pytest.mark.anyio
+async def test_search_with_whitespace_query_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="non-empty string query"):
-        executor.execute_tool_call("search_knowledge_base", {"query": "   "}, ToolExecutionContext())
+        await executor.execute_tool_call("search_knowledge_base", {"query": "   "}, ToolExecutionContext())
 
 
-def test_search_with_missing_query_raises_error() -> None:
+@pytest.mark.anyio
+async def test_search_with_missing_query_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="non-empty string query"):
-        executor.execute_tool_call("search_knowledge_base", {}, ToolExecutionContext())
+        await executor.execute_tool_call("search_knowledge_base", {}, ToolExecutionContext())
 
 
-def test_search_with_non_integer_limit_raises_error() -> None:
+@pytest.mark.anyio
+async def test_search_with_non_integer_limit_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="limit must be an integer"):
-        executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": "five"}, ToolExecutionContext())
+        await executor.execute_tool_call(
+            "search_knowledge_base", {"query": "alpha", "limit": "five"}, ToolExecutionContext()
+        )
 
 
-def test_search_with_zero_limit_raises_error() -> None:
+@pytest.mark.anyio
+async def test_search_with_zero_limit_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="limit must be at least"):
-        executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 0}, ToolExecutionContext())
+        await executor.execute_tool_call("search_knowledge_base", {"query": "alpha", "limit": 0}, ToolExecutionContext())
 
 
-def test_search_with_json_string_arguments() -> None:
-    """Arguments may arrive as a JSON-encoded string from the provider."""
+@pytest.mark.anyio
+async def test_search_with_json_string_arguments() -> None:
     import json
 
     executor = ToolExecutor(FakeKnowledgeAccess())
-    result = executor.execute_tool_call(
+    result = await executor.execute_tool_call(
         "search_knowledge_base", json.dumps({"query": "alpha", "limit": 1}), ToolExecutionContext()
     )
 
@@ -198,54 +203,57 @@ def test_search_with_json_string_arguments() -> None:
     assert result["hits"][0]["file_id"] == "file-a"
 
 
-def test_search_with_invalid_json_string_raises_error() -> None:
+@pytest.mark.anyio
+async def test_search_with_invalid_json_string_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(InvalidToolArgumentsError, match="valid JSON"):
-        executor.execute_tool_call("search_knowledge_base", "{bad json}", ToolExecutionContext())
+        await executor.execute_tool_call("search_knowledge_base", "{bad json}", ToolExecutionContext())
 
 
-def test_read_with_empty_file_id_raises_error() -> None:
+@pytest.mark.anyio
+async def test_read_with_empty_file_id_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
     ctx = ToolExecutionContext()
-    executor.execute_tool_call("search_knowledge_base", {"query": "alpha"}, ctx)
+    await executor.execute_tool_call("search_knowledge_base", {"query": "alpha"}, ctx)
 
     with pytest.raises(InvalidToolArgumentsError, match="non-empty string file_id"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": ""}, ctx)
+        await executor.execute_tool_call("read_knowledge_file", {"file_id": ""}, ctx)
 
 
-def test_read_with_whitespace_file_id_raises_error() -> None:
+@pytest.mark.anyio
+async def test_read_with_whitespace_file_id_raises_error() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
     ctx = ToolExecutionContext()
-    executor.execute_tool_call("search_knowledge_base", {"query": "alpha"}, ctx)
+    await executor.execute_tool_call("search_knowledge_base", {"query": "alpha"}, ctx)
 
     with pytest.raises(InvalidToolArgumentsError, match="non-empty string file_id"):
-        executor.execute_tool_call("read_knowledge_file", {"file_id": "   "}, ctx)
+        await executor.execute_tool_call("read_knowledge_file", {"file_id": "   "}, ctx)
 
 
-def test_read_missing_file_returns_not_found_payload() -> None:
-    """read_knowledge_file for a valid but absent file must return found=False."""
+@pytest.mark.anyio
+async def test_read_missing_file_returns_not_found_payload() -> None:
     executor = ToolExecutor(FakeKnowledgeAccess())
     ctx = ToolExecutionContext(allowed_file_ids={"nonexistent-file"})
 
-    result = executor.execute_tool_call("read_knowledge_file", {"file_id": "nonexistent-file"}, ctx)
+    result = await executor.execute_tool_call("read_knowledge_file", {"file_id": "nonexistent-file"}, ctx)
 
     assert result["found"] is False
     assert result["content"] is None
 
 
-def test_unsupported_tool_raises_error() -> None:
+@pytest.mark.anyio
+async def test_unsupported_tool_raises_error() -> None:
     from app.llm.exceptions import UnsupportedToolError
 
     executor = ToolExecutor(FakeKnowledgeAccess())
 
     with pytest.raises(UnsupportedToolError, match="Unsupported tool"):
-        executor.execute_tool_call("delete_all_files", {}, ToolExecutionContext())
+        await executor.execute_tool_call("delete_all_files", {}, ToolExecutionContext())
 
 
-def test_execute_tool_calls_returns_tool_messages() -> None:
-    """execute_tool_calls must wrap each result in a tool-role message dict."""
-
+@pytest.mark.anyio
+async def test_execute_tool_calls_returns_tool_messages() -> None:
     class _FakeToolCall:
         def __init__(self, call_id: str, name: str, args: str) -> None:
             self.id = call_id
@@ -264,7 +272,7 @@ def test_execute_tool_calls_returns_tool_messages() -> None:
 
     tool_calls = [_FakeToolCall("call-1", "search_knowledge_base", json.dumps({"query": "alpha", "limit": 2}))]
 
-    messages = executor.execute_tool_calls(tool_calls, ToolExecutionContext())
+    messages = await executor.execute_tool_calls(tool_calls, ToolExecutionContext())
 
     assert len(messages) == 1
     msg = messages[0]

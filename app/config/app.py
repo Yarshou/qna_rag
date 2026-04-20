@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from app.api import router
 from app.config import settings
 from app.config.setup import setup
-from app.db.connection import resolve_database_path
+from app.db.connection import build_connection_factory, resolve_database_path
 from app.db.init import initialize_database
 
 logger = logging.getLogger(__name__)
@@ -16,18 +16,58 @@ logger = logging.getLogger(__name__)
 async def lifespan(application: FastAPI):
     await initialize_database(db_path=resolve_database_path())
 
-    # Build the knowledge index once at startup so that search queries read
-    # from an in-memory list rather than scanning the filesystem on every call.
-    application.state.knowledge_indexer = None
-    if settings.KNOWLEDGE_DIR is not None:
-        # Import here to avoid a circular dependency at module level.
-        from app.knowledge import KnowledgeIndexer, KnowledgeLoader
+    application.state.knowledge_loader = None
+    application.state.embeddings_client = None
+    application.state.knowledge_repository = None
 
-        loader = KnowledgeLoader(settings.KNOWLEDGE_DIR)
-        indexer = KnowledgeIndexer(loader)
-        doc_count = len(indexer.build_index())
-        application.state.knowledge_indexer = indexer
-        logger.info("knowledge_index_built", extra={"doc_count": doc_count, "knowledge_dir": str(settings.KNOWLEDGE_DIR)})
+    if settings.KNOWLEDGE_DIR is None:
+        yield
+        return
+
+    from app.knowledge import KnowledgeLoader, sync_knowledge_index
+    from app.repositories.knowledge import KnowledgeRepository
+
+    loader = KnowledgeLoader(settings.KNOWLEDGE_DIR)
+    application.state.knowledge_loader = loader
+
+    embeddings_client = None
+    if settings.HYBRID_ENABLED:
+        try:
+            from app.llm import OpenAIChatClient
+
+            embeddings_client = OpenAIChatClient()
+        except Exception as exc:
+            logger.warning(
+                "knowledge_embeddings_client_unavailable",
+                extra={"error_type": exc.__class__.__name__},
+            )
+
+    if embeddings_client is not None:
+        application.state.embeddings_client = embeddings_client
+        connection_factory = build_connection_factory(resolve_database_path())
+        repository = KnowledgeRepository(connection_factory=connection_factory)
+        application.state.knowledge_repository = repository
+
+        try:
+            doc_count = await sync_knowledge_index(
+                loader=loader,
+                embeddings_client=embeddings_client,
+                repository=repository,
+                embedding_model=settings.EMBEDDING_MODEL,
+                batch_size=settings.EMBEDDING_BATCH_SIZE,
+            )
+            logger.info(
+                "knowledge_index_ready",
+                extra={
+                    "doc_count": doc_count,
+                    "knowledge_dir": str(settings.KNOWLEDGE_DIR),
+                },
+            )
+        except Exception as exc:
+            logger.error(
+                "knowledge_index_sync_failed",
+                extra={"error_type": exc.__class__.__name__, "error": str(exc)},
+            )
 
     yield
 

@@ -1,5 +1,5 @@
-from app.domain import Message
 from app.repositories.messages import MessagesRepository
+from app.types import Message
 
 
 class ContextService:

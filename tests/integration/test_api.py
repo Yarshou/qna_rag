@@ -5,8 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config.app import app
-from app.domain import Chat, ChatEvent, ChatStatus, EventType, Message, MessageRole
 from app.services import ChatNotFoundError, MessageProcessingResult
+from app.types import Chat, ChatEvent, ChatStatus, EventType, Message, MessageRole
 
 
 class FakeChatService:

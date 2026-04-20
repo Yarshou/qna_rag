@@ -118,6 +118,51 @@ class OpenAIChatClient:
         )
         return response
 
+    def create_embeddings(self, inputs: list[str]) -> list[list[float]]:
+        """Return one embedding vector per input string.
+
+        Uses the same underlying provider client as chat completions.
+        The model is controlled by ``settings.EMBEDDING_MODEL`` (for Azure this
+        should be the embedding deployment name; for generic providers, the
+        model identifier).
+
+        Parameters
+        ----------
+        inputs:
+            Non-empty list of text strings to embed.
+
+        Returns
+        -------
+        list[list[float]]
+            One float vector per input, in the same order.
+
+        Raises
+        ------
+        LLMProviderError
+            When the provider returns an API error or an unexpected exception.
+        """
+        from app.config import settings
+
+        try:
+            response = self._client.embeddings.create(
+                model=settings.EMBEDDING_MODEL,
+                input=inputs,
+            )
+        except APIError as exc:
+            logger.error(
+                "llm_embeddings_failed",
+                extra={"provider": self._provider, "model": settings.EMBEDDING_MODEL, "error_type": exc.__class__.__name__},
+            )
+            raise LLMProviderError("Embeddings request failed.") from exc
+        except Exception as exc:
+            logger.error(
+                "llm_embeddings_unexpected_failure",
+                extra={"provider": self._provider, "model": settings.EMBEDDING_MODEL, "error_type": exc.__class__.__name__},
+            )
+            raise LLMProviderError("Unexpected embeddings client failure.") from exc
+
+        return [item.embedding for item in response.data]
+
     async def create_chat_completion_async(
         self,
         messages: list[ChatCompletionMessageParam],

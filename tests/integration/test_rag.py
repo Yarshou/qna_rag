@@ -64,13 +64,14 @@ def rag_db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return db_path
 
 
-def _build_services(db_path: Path):
+async def _build_services(db_path: Path):
     """Construct real service objects wired to the isolated test database."""
     from app.db.connection import build_connection_factory
-    from app.knowledge import KnowledgeLoader, KnowledgeRetriever
+    from app.knowledge import KnowledgeLoader, KnowledgeRetriever, sync_knowledge_index
     from app.llm import OpenAIChatClient, ToolExecutor
     from app.repositories.chats import ChatsRepository
     from app.repositories.events import EventsRepository
+    from app.repositories.knowledge import KnowledgeRepository
     from app.repositories.messages import MessagesRepository
     from app.services.chat_service import ChatService
     from app.services.context_service import ContextService
@@ -82,13 +83,26 @@ def _build_services(db_path: Path):
     chats_repo = ChatsRepository(connection_factory=connection_factory)
     messages_repo = MessagesRepository(connection_factory=connection_factory)
     events_repo = EventsRepository(connection_factory=connection_factory)
+    knowledge_repo = KnowledgeRepository(connection_factory=connection_factory)
 
     chat_service = ChatService(chats_repository=chats_repo)
     notification_service = NotificationService(events_repository=events_repo)
     context_service = ContextService(messages_repo)
 
     loader = KnowledgeLoader(_FIXTURES_KNOWLEDGE_DIR)
-    retriever = KnowledgeRetriever(loader)
+    embeddings_client = OpenAIChatClient()
+    await sync_knowledge_index(
+        loader=loader,
+        embeddings_client=embeddings_client,
+        repository=knowledge_repo,
+        embedding_model=settings.EMBEDDING_MODEL,
+        batch_size=settings.EMBEDDING_BATCH_SIZE,
+    )
+    retriever = KnowledgeRetriever(
+        repository=knowledge_repo,
+        embeddings_client=embeddings_client,
+        loader=loader,
+    )
     tool_executor = ToolExecutor(retriever)
 
     message_service = MessageService(
@@ -112,7 +126,7 @@ async def test_rag_answers_question_grounded_in_knowledge_base(rag_db_path: Path
     'readiness checks', so a query about deployment should trigger a retrieval
     and reference that content.
     """
-    chat_service, message_service = _build_services(rag_db_path)
+    chat_service, message_service = await _build_services(rag_db_path)
 
     chat = await chat_service.create_chat(title="RAG integration test")
     result = await message_service.post_user_message(
@@ -131,7 +145,7 @@ async def test_rag_answers_question_grounded_in_knowledge_base(rag_db_path: Path
 async def test_rag_persists_user_and_assistant_messages(rag_db_path: Path) -> None:
     """Both the user message and the assistant reply must be saved to the DB
     and retrievable through the message service."""
-    chat_service, message_service = _build_services(rag_db_path)
+    chat_service, message_service = await _build_services(rag_db_path)
 
     chat = await chat_service.create_chat(title="Persistence check")
     await message_service.post_user_message(chat.id, "Tell me about Python basics.")
@@ -149,7 +163,7 @@ async def test_rag_persists_user_and_assistant_messages(rag_db_path: Path) -> No
 async def test_rag_maintains_conversation_context_across_turns(rag_db_path: Path) -> None:
     """A follow-up question in the same chat must be answered with awareness
     of the prior exchange — the model must not start from a blank slate."""
-    chat_service, message_service = _build_services(rag_db_path)
+    chat_service, message_service = await _build_services(rag_db_path)
 
     chat = await chat_service.create_chat(title="Multi-turn context test")
     await message_service.post_user_message(chat.id, "What is the knowledge base about?")
@@ -166,10 +180,10 @@ async def test_rag_emits_lifecycle_events(rag_db_path: Path) -> None:
     """After a successful message flow the notification service must have
     persisted at least the message_received and message_completed events."""
     from app.db.connection import build_connection_factory
-    from app.domain import EventType
     from app.repositories.events import EventsRepository
+    from app.types import EventType
 
-    chat_service, message_service = _build_services(rag_db_path)
+    chat_service, message_service = await _build_services(rag_db_path)
 
     chat = await chat_service.create_chat(title="Event emission test")
     await message_service.post_user_message(chat.id, "Summarise the deployment notes.")

@@ -68,7 +68,7 @@ celerybeat.pid
 *.sage.py
 src/envs/.env
 /envs/.env
-app/envs/.env
+envs/.env
 app/data/
 *.sqlite3
 *.sqlite3-*
@@ -89,3 +89,5 @@ dmypy.json
 .pytype/
 cython_debug/
 .idea/
+.claude
+.codex

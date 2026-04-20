@@ -1,117 +1,165 @@
-"""Knowledge base retrieval primitives backed by any DocumentStoreProtocol.
+"""Stateless hybrid retrieval over the ``kb_documents`` / ``kb_fts`` tables.
 
-The retriever is intentionally decoupled from the storage layer via
-:class:`DocumentStoreProtocol`.  This allows both
-:class:`~app.knowledge.loader.KnowledgeLoader` (direct filesystem reads) and
-:class:`~app.knowledge.indexer.KnowledgeIndexer` (in-memory cache) to be
-used interchangeably as the backing store.
+For every call the retriever:
 
-In production the indexer is preferred because it eliminates per-query
-filesystem scans.  In tests or development the loader can be passed directly
-without building an index first.
+1. embeds the query via the configured embeddings client;
+2. asks the repository for the top-N BM25 candidates (FTS5);
+3. loads those candidates' persisted embeddings + content;
+4. computes cosine similarity with NumPy;
+5. fuses the two signals with min-max normalisation and a weighted sum.
+
+All SQL access is delegated to
+:class:`~app.repositories.knowledge.KnowledgeRepository`; the retriever
+itself keeps no per-document state.
 """
 
-from typing import Protocol
+import logging
 
-from app.knowledge.models import KnowledgeDocument, KnowledgeSearchHit, KnowledgeSearchResult
-from app.knowledge.ranking import build_snippet, score_document
+from app.knowledge.loader import KnowledgeLoader
+from app.knowledge.models import (
+    KnowledgeDocument,
+    KnowledgeSearchHit,
+    KnowledgeSearchResult,
+)
+from app.knowledge.ranking import (
+    build_snippet_from_content,
+    cosine_scores,
+    min_max_normalize,
+    tokenize,
+)
+from app.repositories.knowledge import KnowledgeRepository
 
-
-class DocumentStoreProtocol(Protocol):
-    """Minimal interface required by :class:`KnowledgeRetriever`.
-
-    Both :class:`~app.knowledge.loader.KnowledgeLoader` and
-    :class:`~app.knowledge.indexer.KnowledgeIndexer` satisfy this protocol
-    structurally — no explicit inheritance is required.
-    """
-
-    def list_documents(self) -> list[KnowledgeDocument]:
-        """Return all available knowledge documents."""
-        ...
-
-    def get_document(self, file_id: str) -> KnowledgeDocument | None:
-        """Return a single document by its stable file ID, or ``None``."""
-        ...
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeRetriever:
-    """Provides deterministic file-level retrieval over a document store.
+    """SQLite-backed hybrid retriever (FTS5 BM25 + cosine on embeddings).
 
-    Accepts any object that satisfies :class:`DocumentStoreProtocol` — pass a
-    :class:`~app.knowledge.indexer.KnowledgeIndexer` for production use (no
-    per-query I/O) or a :class:`~app.knowledge.loader.KnowledgeLoader` for
-    lightweight scripts and tests.
+    Parameters
+    ----------
+    repository:
+        :class:`~app.repositories.knowledge.KnowledgeRepository` used for
+        every database access.
+    embeddings_client:
+        Duck-typed: must expose
+        ``create_embeddings(list[str]) -> list[list[float]]``.
+    loader:
+        Filesystem loader used only by :meth:`read_knowledge_file`.
+    hybrid_lexical_weight:
+        ``α ∈ [0, 1]`` — weight of the BM25 signal in the fused score.
+    fts_candidate_limit:
+        Maximum number of BM25 candidates to pull before semantic re-ranking.
     """
 
-    def __init__(self, store: DocumentStoreProtocol) -> None:
-        """Bind the retriever to a document store.
+    def __init__(
+        self,
+        repository: KnowledgeRepository,
+        embeddings_client,
+        loader: KnowledgeLoader,
+        hybrid_lexical_weight: float = 0.5,
+        fts_candidate_limit: int = 20,
+    ) -> None:
+        self._repository = repository
+        self._embeddings_client = embeddings_client
+        self._loader = loader
+        self._alpha = max(0.0, min(1.0, hybrid_lexical_weight))
+        self._fts_candidate_limit = max(1, fts_candidate_limit)
 
-        Parameters
-        ----------
-        store:
-            Any object that satisfies :class:`DocumentStoreProtocol`.
-        """
-        self._store = store
-
-    def search_knowledge_base(self, query: str, limit: int = 5) -> KnowledgeSearchResult:
-        """Search candidate files using lexical scoring and return ranked hits.
-
-        Documents are scored with :func:`~app.knowledge.ranking.score_document`
-        and sorted by ``(score DESC, filename ASC, id ASC)`` for stable
-        ordering.  Zero-score documents are excluded from results.
-
-        Parameters
-        ----------
-        query:
-            Raw user query string; whitespace is normalised internally.
-        limit:
-            Maximum number of results to return.  Values ``≤ 0`` return an
-            empty result.
-
-        Returns
-        -------
-        KnowledgeSearchResult
-            Ranked search hits with optional snippets.
-        """
+    async def search_knowledge_base(self, query: str, limit: int = 5) -> KnowledgeSearchResult:
+        """Return ranked hits for *query* (file-level)."""
         normalized_query = query.strip()
-        if not normalized_query:
-            return KnowledgeSearchResult(query=query, hits=[])
-
         safe_limit = max(0, limit)
-        if safe_limit == 0:
+        if not normalized_query or safe_limit == 0:
             return KnowledgeSearchResult(query=query, hits=[])
 
-        scored_hits: list[tuple[float, KnowledgeDocument]] = []
-        for document in self._store.list_documents():
-            score = score_document(document, normalized_query)
-            if score <= 0:
-                continue
-            scored_hits.append((score, document))
+        fts_tokens = tokenize(normalized_query)
+        fts_query = " ".join(fts_tokens)
 
-        scored_hits.sort(key=lambda item: (-item[0], item[1].filename, item[1].id))
+        lex_by_id: dict[str, float] = {}
+        if fts_query:
+            fts_hits = await self._repository.fts_search(
+                fts_query=fts_query,
+                limit=self._fts_candidate_limit,
+            )
+            lex_by_id = dict(fts_hits)
+
+        if lex_by_id:
+            candidate_ids = list(lex_by_id.keys())
+        else:
+            # FTS5 yielded nothing (no usable tokens or no matches) — fall back
+            # to cosine-only scoring over every indexed document.
+            candidate_ids = await self._repository.list_file_ids()
+
+        if not candidate_ids:
+            return KnowledgeSearchResult(query=query, hits=[])
+
+        candidates = await self._repository.load_candidates(candidate_ids)
+        if not candidates:
+            return KnowledgeSearchResult(query=query, hits=[])
+
+        query_vec = self._embed_query(normalized_query)
+
+        doc_vecs = [row.embedding for row in candidates]
+        if query_vec is not None and doc_vecs:
+            sem_list = cosine_scores(query_vec, doc_vecs)
+        else:
+            sem_list = [0.0] * len(candidates)
+
+        lex_list = [lex_by_id.get(row.file_id, 0.0) for row in candidates]
+
+        norm_lex = min_max_normalize(lex_list)
+        norm_sem = min_max_normalize(sem_list)
+
+        alpha = self._alpha
+        scored = [
+            (
+                alpha * norm_lex[i] + (1.0 - alpha) * norm_sem[i],
+                lex_list[i],
+                sem_list[i],
+                candidates[i],
+            )
+            for i in range(len(candidates))
+        ]
+        scored.sort(key=lambda item: (-item[0], item[3].filename, item[3].file_id))
+
         hits = [
             KnowledgeSearchHit(
-                file_id=document.id,
-                filename=document.filename,
-                score=round(score, 4),
-                snippet=build_snippet(document, normalized_query) or None,
+                file_id=row.file_id,
+                filename=row.filename,
+                score=round(fused, 4),
+                snippet=build_snippet_from_content(row.content, normalized_query) or None,
+                lexical_score=round(lex, 4),
+                semantic_score=round(sem, 4),
             )
-            for score, document in scored_hits[:safe_limit]
+            for fused, lex, sem, row in scored[:safe_limit]
         ]
 
+        logger.info(
+            "knowledge_retrieval_scored",
+            extra={
+                "candidates": len(candidates),
+                "hits": len(hits),
+                "alpha": alpha,
+                "fts_used": bool(lex_by_id),
+            },
+        )
         return KnowledgeSearchResult(query=query, hits=hits)
 
-    def read_knowledge_file(self, file_id: str) -> KnowledgeDocument | None:
-        """Return the full content of a single file by its stable knowledge file ID.
+    async def read_knowledge_file(self, file_id: str) -> KnowledgeDocument | None:
+        """Return the full content of a single file by its stable ID."""
+        return self._loader.get_document(file_id)
 
-        Parameters
-        ----------
-        file_id:
-            Stable SHA-256-derived identifier assigned at index time.
+    # ── private helpers ──────────────────────────────────────────────────────
 
-        Returns
-        -------
-        KnowledgeDocument | None
-            The document with full content, or ``None`` if not found.
-        """
-        return self._store.get_document(file_id)
+    def _embed_query(self, query: str) -> list[float] | None:
+        if self._embeddings_client is None:
+            return None
+        try:
+            vectors = self._embeddings_client.create_embeddings([query])
+        except Exception as exc:
+            logger.warning(
+                "knowledge_query_embedding_failed",
+                extra={"error_type": exc.__class__.__name__},
+            )
+            return None
+        return vectors[0] if vectors else None

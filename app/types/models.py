@@ -1,4 +1,4 @@
-"""Core domain entities shared across repository and service boundaries.
+"""Core types entities shared across repository and service boundaries.
 
 Each entity follows the same two-method contract:
 
@@ -6,19 +6,19 @@ Each entity follows the same two-method contract:
   ``dict`` (typically an ``aiosqlite.Row`` cast to a mapping).  String
   coercions like ``str(data["id"])`` are intentionally defensive: SQLite
   can return integer row IDs even when the column is declared TEXT, and
-  the coercion keeps the domain layer free of database-type surprises.
+  the coercion keeps the types layer free of database-type surprises.
 
 * ``to_dict()`` — serialises the entity to a plain ``dict`` with stable
   string representations (ISO 8601 for timestamps, ``.value`` for enums).
-  Used when passing domain objects to the repository write path or logging.
+  Used when passing types objects to the repository write path or logging.
 """
 
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from app.domain.enums import ChatStatus, EventType, MessageRole
-from app.domain.utils import JsonMap, optional_json_map, parse_datetime
+from app.types.enums import ChatStatus, EventType, MessageRole
+from app.types.utils import JsonMap, optional_json_map, parse_datetime
 
 
 @dataclass(slots=True)
@@ -31,7 +31,7 @@ class Chat:
     status: ChatStatus
 
     def __post_init__(self) -> None:
-        """Coerce incoming values into the domain's timestamp and enum types."""
+        """Coerce incoming values into the types's timestamp and enum types."""
 
         self.created_at = parse_datetime(self.created_at)
         self.status = ChatStatus(self.status)
@@ -70,7 +70,7 @@ class Message:
     metadata: JsonMap | None = None
 
     def __post_init__(self) -> None:
-        """Coerce incoming values into the domain's timestamp and enum types."""
+        """Coerce incoming values into the types's timestamp and enum types."""
 
         self.role = MessageRole(self.role)
         self.created_at = parse_datetime(self.created_at)
@@ -113,7 +113,7 @@ class ChatEvent:
     created_at: datetime
 
     def __post_init__(self) -> None:
-        """Coerce incoming values into the domain's timestamp and enum types."""
+        """Coerce incoming values into the types's timestamp and enum types."""
 
         self.event_type = EventType(self.event_type)
         self.created_at = parse_datetime(self.created_at)

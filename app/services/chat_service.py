@@ -1,8 +1,8 @@
 import asyncio
 import logging
 
-from app.domain import Chat
 from app.repositories.chats import ChatsRepository
+from app.types import Chat
 
 logger = logging.getLogger(__name__)
 

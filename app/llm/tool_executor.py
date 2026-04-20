@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 class KnowledgeAccessProtocol(Protocol):
     """Minimal knowledge access contract required by the tool executor."""
 
-    def search_knowledge_base(self, query: str, limit: int = 5) -> KnowledgeSearchResult: ...
+    async def search_knowledge_base(self, query: str, limit: int = 5) -> KnowledgeSearchResult: ...
 
-    def read_knowledge_file(self, file_id: str) -> KnowledgeDocument | None: ...
+    async def read_knowledge_file(self, file_id: str) -> KnowledgeDocument | None: ...
 
 
 @dataclass
@@ -42,7 +42,7 @@ class ToolExecutor:
     def __init__(self, knowledge_access: KnowledgeAccessProtocol) -> None:
         self._knowledge_access = knowledge_access
 
-    def execute_tool_call(
+    async def execute_tool_call(
         self,
         tool_name: str,
         arguments: str | dict[str, Any] | None,
@@ -52,14 +52,14 @@ class ToolExecutor:
         parsed_arguments = self._parse_arguments(arguments)
 
         if tool_name == "search_knowledge_base":
-            return self._execute_search(parsed_arguments, ctx)
+            return await self._execute_search(parsed_arguments, ctx)
 
         if tool_name == "read_knowledge_file":
-            return self._execute_read(parsed_arguments, ctx)
+            return await self._execute_read(parsed_arguments, ctx)
 
         raise UnsupportedToolError(f"Unsupported tool: {tool_name}")
 
-    def execute_tool_calls(self, tool_calls: list[Any], ctx: ToolExecutionContext) -> list[dict[str, Any]]:
+    async def execute_tool_calls(self, tool_calls: list[Any], ctx: ToolExecutionContext) -> list[dict[str, Any]]:
         """Execute provider tool calls and return tool messages ready for chat history."""
         tool_messages: list[dict[str, Any]] = []
 
@@ -73,7 +73,7 @@ class ToolExecutor:
                 raise InvalidToolArgumentsError("Tool call is missing a valid function name.")
 
             arguments = getattr(function_payload, "arguments", None)
-            result = self.execute_tool_call(tool_name, arguments, ctx)
+            result = await self.execute_tool_call(tool_name, arguments, ctx)
             tool_call_id = getattr(tool_call, "id", None)
             if not isinstance(tool_call_id, str) or not tool_call_id:
                 raise InvalidToolArgumentsError("Tool call is missing a valid tool call id.")
@@ -110,7 +110,7 @@ class ToolExecutor:
 
         return parsed_arguments
 
-    def _execute_search(self, arguments: dict[str, Any], ctx: ToolExecutionContext) -> dict[str, Any]:
+    async def _execute_search(self, arguments: dict[str, Any], ctx: ToolExecutionContext) -> dict[str, Any]:
         query = arguments.get("query")
         limit = arguments.get("limit", 5)
 
@@ -123,7 +123,7 @@ class ToolExecutor:
         if limit < 1:
             raise InvalidToolArgumentsError("search_knowledge_base limit must be at least 1.")
 
-        result = self._knowledge_access.search_knowledge_base(query=query.strip(), limit=limit)
+        result = await self._knowledge_access.search_knowledge_base(query=query.strip(), limit=limit)
         ctx.allowed_file_ids = {hit.file_id for hit in result.hits}
         logger.info(
             "knowledge_tool_search_executed",
@@ -131,7 +131,7 @@ class ToolExecutor:
         )
         return self._serialize_result(result)
 
-    def _execute_read(self, arguments: dict[str, Any], ctx: ToolExecutionContext) -> dict[str, Any]:
+    async def _execute_read(self, arguments: dict[str, Any], ctx: ToolExecutionContext) -> dict[str, Any]:
         file_id = arguments.get("file_id")
         if not isinstance(file_id, str) or not file_id.strip():
             raise InvalidToolArgumentsError("read_knowledge_file requires a non-empty string file_id.")
@@ -144,7 +144,7 @@ class ToolExecutor:
                 f"read_knowledge_file is limited to {MAX_KNOWLEDGE_FILES_IN_CONTEXT} files per execution flow."
             )
 
-        document = self._knowledge_access.read_knowledge_file(file_id=normalized_file_id)
+        document = await self._knowledge_access.read_knowledge_file(file_id=normalized_file_id)
         ctx.full_file_reads += 1
         logger.info(
             "knowledge_tool_read_executed",

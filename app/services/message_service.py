@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.config import settings
-from app.domain import Message, MessageRole
 from app.guardrails import InputGuard, OutputGuard
 from app.knowledge import KnowledgeLoader, KnowledgeRetriever
 from app.llm import (
@@ -21,6 +20,7 @@ from app.repositories.messages import MessagesRepository
 from app.services.chat_service import ChatService
 from app.services.context_service import ContextService
 from app.services.notification_service import NotificationService
+from app.types import Message, MessageRole
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +186,7 @@ class MessageService:
             for tool_call in tool_calls:
                 tool_name = getattr(getattr(tool_call, "function", None), "name", None)
                 arguments = getattr(getattr(tool_call, "function", None), "arguments", None)
-                tool_result = self._tool_executor.execute_tool_call(tool_name, arguments, tool_ctx)
+                tool_result = await self._tool_executor.execute_tool_call(tool_name, arguments, tool_ctx)
                 tool_message = self._build_tool_message(tool_call=tool_call, tool_name=tool_name, tool_result=tool_result)
                 conversation.append(tool_message)
                 tool_calls_executed += 1

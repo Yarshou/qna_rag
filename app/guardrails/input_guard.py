@@ -32,7 +32,7 @@ class InputGuard:
     2. Injection patterns — a deny-list of well-known prompt-injection
        phrases caught before the model ever sees the message.
 
-    Neither check attempts to reason about intent or domain; both operate
+    Neither check attempts to reason about intent or types; both operate
     on objective, measurable properties of the text.
     """
 
@@ -42,10 +42,6 @@ class InputGuard:
     def check(self, content: str) -> None:
         self._check_length(content)
         self._check_injection(content)
-
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
 
     def _check_length(self, content: str) -> None:
         if len(content) > self._max_content_length:

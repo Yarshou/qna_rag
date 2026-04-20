@@ -17,5 +17,5 @@ AGENTS.md
 *.md
 !README.md
 .dockerignore
-app/envs/
+envs/
 app/data/
