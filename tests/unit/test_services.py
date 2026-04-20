@@ -134,11 +134,6 @@ class FakeEventsRepository:
         return rows[-1] if rows else None
 
 
-# ===========================================================================
-# ChatService tests
-# ===========================================================================
-
-
 @pytest.mark.anyio
 async def test_chat_service_create_returns_chat() -> None:
     service = ChatService(FakeChatsRepository())
@@ -223,11 +218,6 @@ async def test_chat_service_delete_missing_chat_returns_false() -> None:
     assert deleted is False
 
 
-# ===========================================================================
-# ContextService tests
-# ===========================================================================
-
-
 @pytest.mark.anyio
 async def test_context_service_returns_empty_history_for_new_chat() -> None:
     service = ContextService(FakeMessagesRepository())
@@ -285,11 +275,6 @@ async def test_context_service_recent_history_with_limit_truncates() -> None:
     history = await service.get_recent_chat_history("chat-1", limit=2)
 
     assert len(history) == 2
-
-
-# ===========================================================================
-# NotificationService tests
-# ===========================================================================
 
 
 @pytest.mark.anyio

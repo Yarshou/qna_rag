@@ -234,11 +234,6 @@ def _build_service(
     return service, messages_repo, notification, llm, tool_exec
 
 
-# ===========================================================================
-# Happy paths
-# ===========================================================================
-
-
 @pytest.mark.anyio
 async def test_post_user_message_without_tool_calls_returns_direct_answer() -> None:
     service, repo, notif, llm, tools = _build_service(
@@ -345,11 +340,6 @@ async def test_post_user_message_deduplicates_used_knowledge_files() -> None:
     assert result.used_knowledge_files == ["f-a"]
 
 
-# ===========================================================================
-# Error paths
-# ===========================================================================
-
-
 @pytest.mark.anyio
 async def test_post_user_message_unknown_chat_raises_chat_not_found() -> None:
     service, *_ = _build_service(chat=None)
@@ -439,11 +429,6 @@ async def test_tool_call_without_function_name_raises_message_processing_error()
 
     with pytest.raises(MessageProcessingError):
         await service.post_user_message("chat-1", "hi")
-
-
-# ===========================================================================
-# Guardrails
-# ===========================================================================
 
 
 class _InputGuardReject:

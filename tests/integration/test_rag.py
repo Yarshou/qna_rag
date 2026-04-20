@@ -182,9 +182,9 @@ async def test_rag_maintains_conversation_context_across_turns(rag_db_path: Path
 async def test_rag_emits_lifecycle_events(rag_db_path: Path) -> None:
     """After a successful message flow the notification service must have
     persisted at least the message_received and message_completed events."""
+    from app.common_types import EventType
     from app.db.connection import build_connection_factory
     from app.repositories.events import EventsRepository
-    from app.common_types import EventType
 
     chat_service, message_service = await _build_services(rag_db_path)
 
