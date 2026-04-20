@@ -3,21 +3,18 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
-from app.config import settings
+from app.common_types import Message
+from app.context import AppContext
 from app.guardrails import GuardrailViolationError
-from app.knowledge import KnowledgeLoader, KnowledgeRetriever
 from app.llm import (
     InvalidToolArgumentsError,
     LLMClientConfigurationError,
     LLMProviderError,
-    ToolExecutor,
     UnsupportedToolError,
 )
-from app.repositories.knowledge import KnowledgeRepository
 from app.schemas.common import ErrorResponse
 from app.schemas.messages import MessageListResponse, MessageResponse, PostMessageRequest, PostMessageResponse
 from app.services import ChatNotFoundError, MessageProcessingError, MessageService
-from app.types import Message
 
 router = APIRouter(tags=["messages"])
 
@@ -30,21 +27,14 @@ ERROR_RESPONSES = {
 }
 
 
-def get_message_service(request: Request) -> MessageService:
-    loader: KnowledgeLoader | None = getattr(request.app.state, "knowledge_loader", None)
-    embeddings_client = getattr(request.app.state, "embeddings_client", None)
-    repository: KnowledgeRepository | None = getattr(request.app.state, "knowledge_repository", None)
+def get_app_context(request: Request) -> AppContext:
+    return request.app.state.context
 
-    tool_executor: ToolExecutor | None = None
-    if loader is not None and embeddings_client is not None and repository is not None:
-        retriever = KnowledgeRetriever(
-            repository=repository,
-            embeddings_client=embeddings_client,
-            loader=loader,
-            hybrid_lexical_weight=settings.HYBRID_LEXICAL_WEIGHT,
-        )
-        tool_executor = ToolExecutor(retriever)
-    return MessageService(tool_executor=tool_executor)
+
+def get_message_service(
+    context: Annotated[AppContext, Depends(get_app_context)],
+) -> MessageService:
+    return MessageService(tool_executor=context.tool_executor)
 
 
 def _message_to_response(message: Message) -> MessageResponse:

@@ -12,15 +12,11 @@ from typing import Any
 
 import pytest
 
+from app.common_types import Chat, ChatEvent, Message
+from app.common_types.enums import ChatStatus, EventType, MessageRole
 from app.services.chat_service import ChatService
 from app.services.context_service import ContextService
 from app.services.notification_service import NotificationService
-from app.types import Chat, ChatEvent, Message
-from app.types.enums import ChatStatus, EventType, MessageRole
-
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
 
 _NOW = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
 
@@ -53,11 +49,6 @@ def _event_row(event_id: str, chat_id: str, event_type: str = "message_received"
         "payload": None,
         "created_at": _NOW.isoformat(),
     }
-
-
-# ---------------------------------------------------------------------------
-# Fake repositories
-# ---------------------------------------------------------------------------
 
 
 class FakeChatsRepository:

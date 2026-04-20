@@ -1,138 +1,21 @@
-from dataclasses import replace
-from datetime import UTC, datetime
+"""Happy-path API integration tests.
 
-import pytest
+These tests hit the FastAPI application through ``TestClient`` with
+business-logic services replaced by fakes from ``conftest.py``, so only
+the HTTP stack (routing, schemas, status codes, serialisation) is
+exercised.
+"""
+
 from fastapi.testclient import TestClient
 
+from app.common_types import Chat, ChatEvent, Message
 from app.config.app import app
-from app.services import ChatNotFoundError, MessageProcessingResult
-from app.types import Chat, ChatEvent, ChatStatus, EventType, Message, MessageRole
-
-
-class FakeChatService:
-    def __init__(self, chat: Chat | None) -> None:
-        self._chat = chat
-
-    async def create_chat(self, title: str | None = None) -> Chat:
-        return replace(self._chat, title=title)
-
-    async def list_chats(self, *, limit: int = 50, offset: int = 0) -> tuple[list[Chat], int]:
-        items = [] if self._chat is None else [self._chat]
-        return items, len(items)
-
-    async def get_chat(self, chat_id: str) -> Chat | None:
-        if self._chat is None or self._chat.id != chat_id:
-            return None
-        return self._chat
-
-    async def delete_chat(self, chat_id: str) -> bool:
-        return self._chat is not None and self._chat.id == chat_id
-
-
-class FakeMessageService:
-    def __init__(self, messages: list[Message], processing_result: MessageProcessingResult) -> None:
-        self._messages = messages
-        self._processing_result = processing_result
-
-    async def list_messages(self, chat_id: str, *, limit: int = 50, offset: int = 0) -> tuple[list[Message], int]:
-        if chat_id != self._processing_result.chat_id:
-            raise ChatNotFoundError(f"Chat '{chat_id}' was not found.")
-        return self._messages, len(self._messages)
-
-    async def post_user_message(self, chat_id: str, content: str) -> MessageProcessingResult:
-        if chat_id != self._processing_result.chat_id:
-            raise ChatNotFoundError(f"Chat '{chat_id}' was not found.")
-        return self._processing_result
-
-
-class FakeNotificationService:
-    def __init__(self, events: list[ChatEvent]) -> None:
-        self._events = events
-
-    async def list_events(
-        self,
-        chat_id: str,
-        *,
-        since: str | None = None,
-        limit: int | None = None,
-    ) -> list[ChatEvent]:
-        items = [event for event in self._events if event.chat_id == chat_id]
-        if since is not None:
-            items = [event for event in items if event.created_at.isoformat() >= since]
-        if limit is not None:
-            items = items[:limit]
-        return items
-
-
-@pytest.fixture
-def client() -> TestClient:
-    with TestClient(app) as test_client:
-        app.dependency_overrides.clear()
-        yield test_client
-        app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def sample_chat() -> Chat:
-    return Chat(
-        id="chat-1",
-        title="Existing chat",
-        status=ChatStatus.ACTIVE,
-        created_at=datetime(2026, 4, 7, 10, 0, tzinfo=UTC),
-    )
-
-
-@pytest.fixture
-def sample_messages(sample_chat: Chat) -> list[Message]:
-    return [
-        Message(
-            id="msg-1",
-            chat_id=sample_chat.id,
-            role=MessageRole.USER,
-            content="What changed?",
-            created_at=datetime(2026, 4, 7, 10, 1, tzinfo=UTC),
-            metadata=None,
-        ),
-        Message(
-            id="msg-2",
-            chat_id=sample_chat.id,
-            role=MessageRole.ASSISTANT,
-            content="The deployment uses readiness checks.",
-            created_at=datetime(2026, 4, 7, 10, 2, tzinfo=UTC),
-            metadata={"used_knowledge_files": ["kb-1"]},
-        ),
-    ]
-
-
-@pytest.fixture
-def sample_processing_result(sample_chat: Chat, sample_messages: list[Message]) -> MessageProcessingResult:
-    return MessageProcessingResult(
-        chat_id=sample_chat.id,
-        user_message=sample_messages[0],
-        assistant_message=sample_messages[1],
-        tool_calls_executed=1,
-        used_knowledge_files=["kb-1"],
-    )
-
-
-@pytest.fixture
-def sample_events(sample_chat: Chat) -> list[ChatEvent]:
-    return [
-        ChatEvent(
-            id="evt-1",
-            chat_id=sample_chat.id,
-            event_type=EventType.MESSAGE_RECEIVED,
-            payload={"message_id": "msg-1"},
-            created_at=datetime(2026, 4, 7, 10, 1, tzinfo=UTC),
-        ),
-        ChatEvent(
-            id="evt-2",
-            chat_id=sample_chat.id,
-            event_type=EventType.MESSAGE_COMPLETED,
-            payload={"assistant_message_id": "msg-2"},
-            created_at=datetime(2026, 4, 7, 10, 2, tzinfo=UTC),
-        ),
-    ]
+from app.services import MessageProcessingResult
+from tests.integration.conftest import (
+    FakeChatService,
+    FakeMessageService,
+    FakeNotificationService,
+)
 
 
 def test_chat_routes(client: TestClient, sample_chat: Chat) -> None:

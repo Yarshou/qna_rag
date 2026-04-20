@@ -24,11 +24,6 @@ def _doc(content: str, filename: str = "notes.txt") -> KnowledgeDocument:
     )
 
 
-# ---------------------------------------------------------------------------
-# tokenize
-# ---------------------------------------------------------------------------
-
-
 def test_tokenize_lowercases_and_splits_alphanumerics() -> None:
     assert tokenize("Hello World 123") == ["hello", "world", "123"]
 
@@ -48,11 +43,6 @@ def test_tokenize_whitespace_only_returns_empty_list() -> None:
 def test_tokenize_drops_special_characters() -> None:
     # Important for FTS5 safety: "C++ !!" must sanitise to ["c"].
     assert tokenize("C++ !!") == ["c"]
-
-
-# ---------------------------------------------------------------------------
-# build_snippet
-# ---------------------------------------------------------------------------
 
 
 def test_snippet_contains_query_token_context() -> None:
@@ -94,11 +84,6 @@ def test_snippet_for_short_content_returns_full_content_without_ellipsis() -> No
     assert not snippet.endswith("...")
 
 
-# ---------------------------------------------------------------------------
-# min_max_normalize
-# ---------------------------------------------------------------------------
-
-
 def test_min_max_normalize_empty_list() -> None:
     assert min_max_normalize([]) == []
 
@@ -121,11 +106,6 @@ def test_min_max_normalize_range_is_zero_to_one() -> None:
 def test_min_max_normalize_preserves_order() -> None:
     normalized = min_max_normalize([1.0, 3.0, 2.0])
     assert normalized[0] < normalized[2] < normalized[1]
-
-
-# ---------------------------------------------------------------------------
-# cosine_scores
-# ---------------------------------------------------------------------------
 
 
 def test_cosine_scores_identical_unit_vector_returns_one() -> None:

@@ -8,6 +8,7 @@ without any network or LLM provider.
 from pathlib import Path
 
 import pytest
+from db.init import initialize_database
 
 from app.db.connection import build_connection_factory
 from app.knowledge import KnowledgeLoader, KnowledgeRetriever, sync_knowledge_index
@@ -51,6 +52,7 @@ async def _build(tmp_path: Path, files: dict[str, str]):
     loader = KnowledgeLoader(kb)
     stub = _StubEmbeddingsClient()
     db_path = tmp_path / "test.sqlite3"
+    await initialize_database(db_path=db_path)
     repo = _repository(db_path)
     await sync_knowledge_index(
         loader=loader,
@@ -68,11 +70,6 @@ async def _build(tmp_path: Path, files: dict[str, str]):
     return retriever, stub, loader, repo
 
 
-# ---------------------------------------------------------------------------
-# sync_knowledge_index
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.anyio
 async def test_sync_index_embeds_every_document(tmp_path: Path) -> None:
     _, stub, _, _ = await _build(tmp_path, {"a.txt": "readiness checks", "b.txt": "kubernetes probe"})
@@ -81,13 +78,7 @@ async def test_sync_index_embeds_every_document(tmp_path: Path) -> None:
 
 @pytest.mark.anyio
 async def test_sync_index_checksum_cache_skips_reembedding(tmp_path: Path) -> None:
-    kb = _setup_kb(tmp_path, {"a.txt": "readiness checks"})
-    loader = KnowledgeLoader(kb)
-    stub = _StubEmbeddingsClient()
-    db = tmp_path / "db.sqlite3"
-    repo = _repository(db)
-
-    await sync_knowledge_index(loader, stub, repo, "stub-model", 16)
+    _, stub, loader, repo = await _build(tmp_path, {"a.txt": "readiness checks"})
     after_first = stub.call_count
 
     await sync_knowledge_index(loader, stub, repo, "stub-model", 16)
@@ -96,16 +87,10 @@ async def test_sync_index_checksum_cache_skips_reembedding(tmp_path: Path) -> No
 
 @pytest.mark.anyio
 async def test_sync_index_reembeds_when_content_changes(tmp_path: Path) -> None:
-    kb = _setup_kb(tmp_path, {"a.txt": "readiness"})
-    loader = KnowledgeLoader(kb)
-    stub = _StubEmbeddingsClient()
-    db = tmp_path / "db.sqlite3"
-    repo = _repository(db)
-
-    await sync_knowledge_index(loader, stub, repo, "stub-model", 16)
+    _, stub, loader, repo = await _build(tmp_path, {"a.txt": "readiness"})
     first = stub.call_count
 
-    (kb / "a.txt").write_text("completely different content", encoding="utf-8")
+    (tmp_path / "kb" / "a.txt").write_text("completely different content", encoding="utf-8")
     await sync_knowledge_index(loader, stub, repo, "stub-model", 16)
 
     assert stub.call_count > first
@@ -113,26 +98,15 @@ async def test_sync_index_reembeds_when_content_changes(tmp_path: Path) -> None:
 
 @pytest.mark.anyio
 async def test_sync_index_removes_orphaned_rows(tmp_path: Path) -> None:
-    kb = _setup_kb(tmp_path, {"a.txt": "hello", "b.txt": "world"})
-    loader = KnowledgeLoader(kb)
-    stub = _StubEmbeddingsClient()
-    db = tmp_path / "db.sqlite3"
-    repo = _repository(db)
+    _, stub, loader, repo = await _build(tmp_path, {"a.txt": "hello", "b.txt": "world"})
 
-    await sync_knowledge_index(loader, stub, repo, "stub-model", 16)
-
-    (kb / "b.txt").unlink()
+    (tmp_path / "kb" / "b.txt").unlink()
     count = await sync_knowledge_index(loader, stub, repo, "stub-model", 16)
 
     assert count == 1
     # Repository no longer contains the orphaned row.
     ids = await repo.list_file_ids()
     assert len(ids) == 1
-
-
-# ---------------------------------------------------------------------------
-# search_knowledge_base
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -207,11 +181,6 @@ async def test_search_sanitises_special_characters_in_query(tmp_path: Path) -> N
     result = await retriever.search_knowledge_base('readiness "OR" !! *', limit=5)
     assert len(result.hits) == 1
     assert result.hits[0].filename == "a.txt"
-
-
-# ---------------------------------------------------------------------------
-# read_knowledge_file
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio

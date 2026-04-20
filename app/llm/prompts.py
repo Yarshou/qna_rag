@@ -7,8 +7,8 @@ The module owns two concerns:
    knowledge base, and decline out-of-scope requests.
 
 2. **Message normalisation** — :func:`build_chat_messages` assembles a
-   provider-ready message list from a mix of types objects
-   (:class:`~app.types.models.Message`) and plain dicts.  This lets the
+   provider-ready message list from a mix of common_types objects
+   (:class:`~app.common_types.models.Message`) and plain dicts.  This lets the
    service layer stay decoupled from the exact wire format expected by the
    OpenAI chat-completions API.
 """
@@ -16,7 +16,7 @@ The module owns two concerns:
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from app.types.enums import MessageRole
+from app.common_types.enums import MessageRole
 
 # A provider message is a plain dict with at minimum ``role`` and ``content``
 # keys, matching the OpenAI chat-completions wire format.  Using a type alias
@@ -30,7 +30,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "whether the answer is there. Never ask the user for clarification if a search could resolve the ambiguity. "
     "Search before reading full files, read only the files needed, and never rely on unstated assumptions. "
     "Keep answers faithful to retrieved content and say when the knowledge base does not support a claim. "
-    "Decline any request that is clearly unrelated to the knowledge base types — such as coding exercises, "
+    "Decline any request that is clearly unrelated to the knowledge base common_types — such as coding exercises, "
     "general trivia, or creative tasks — by responding: "
     "'This question is outside the scope of the knowledge base.'"
 )
@@ -67,7 +67,7 @@ def build_chat_messages(
     conversation history, the current user message, and optionally any
     tool-result messages from the current round.
 
-    Both types objects (:class:`~app.types.models.Message`) and plain dicts
+    Both common_types objects (:class:`~app.common_types.models.Message`) and plain dicts
     are accepted anywhere in the sequence — see :func:`_normalize_message`
     for normalisation details.
 
@@ -97,21 +97,16 @@ def build_chat_messages(
     return messages
 
 
-# ---------------------------------------------------------------------------
-# Private helpers
-# ---------------------------------------------------------------------------
-
-
 def _normalize_messages(messages: Iterable[Any]) -> list[ProviderMessage]:
     """Normalise an iterable of mixed-type messages to provider dicts."""
     return [_normalize_message(message) for message in messages]
 
 
 def _normalize_message(message: Any) -> ProviderMessage:
-    """Coerce a single message — types object or dict — to a provider dict.
+    """Coerce a single message — common_types object or dict — to a provider dict.
 
-    Mappings are shallow-copied as-is.  Attribute-based objects (e.g. types
-    :class:`~app.types.models.Message`) are converted by extracting the
+    Mappings are shallow-copied as-is.  Attribute-based objects (e.g. common_types
+    :class:`~app.common_types.models.Message`) are converted by extracting the
     ``role``, ``content``, and optional ``tool_call_id`` / ``name`` /
     ``tool_calls`` attributes.
 
@@ -119,7 +114,7 @@ def _normalize_message(message: Any) -> ProviderMessage:
     ------
     TypeError
         If ``role`` is not a recognised string or
-        :class:`~app.types.enums.MessageRole`, or if ``content`` is not a
+        :class:`~app.common_types.enums.MessageRole`, or if ``content`` is not a
         string for non-assistant roles.
     """
     if isinstance(message, Mapping):
@@ -168,7 +163,7 @@ def _normalize_role(role: Any) -> str:
     Parameters
     ----------
     role:
-        Either a :class:`~app.types.enums.MessageRole` enum member or a
+        Either a :class:`~app.common_types.enums.MessageRole` enum member or a
         plain string.  Strings are stripped and lower-cased before validation.
 
     Raises

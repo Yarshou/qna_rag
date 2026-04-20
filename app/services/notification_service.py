@@ -1,8 +1,8 @@
 import logging
 from collections.abc import Mapping
 
+from app.common_types import ChatEvent, EventType
 from app.repositories.events import EventsRepository
-from app.types import ChatEvent, EventType
 
 logger = logging.getLogger(__name__)
 

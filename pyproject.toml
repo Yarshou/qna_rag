@@ -59,11 +59,38 @@ line_length = 125
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+markers = [
+    "unit: fast, isolated tests that do not touch the database, filesystem (beyond tmp_path), network, or a real LLM provider",
+    "integration: tests that exercise real adapters (SQLite, FastAPI TestClient, filesystem, in-process services) but no external network or LLM",
+    "llm: tests that require a real OpenAI-compatible LLM provider and are skipped automatically when credentials are not configured",
+]
+addopts = "--strict-markers -ra"
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+omit = [
+    "app/config/*",
+    "app/__init__.py",
+    "app/*/__init__.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+precision = 1
+fail_under = 85
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
 
 [dependency-groups]
 dev = [
     "anyio[trio] (>=4.0.0,<5.0.0)",
     "isort (>=8.0.1,<9.0.0)",
     "pytest (>=9.0.2,<10.0.0)",
+    "pytest-cov (>=5.0.0,<7.0.0)",
     "ruff (>=0.15.9,<0.16.0)",
 ]

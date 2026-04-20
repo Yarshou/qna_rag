@@ -1,5 +1,5 @@
+from app.common_types import Message
 from app.repositories.messages import MessagesRepository
-from app.types import Message
 
 
 class ContextService:

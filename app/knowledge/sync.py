@@ -31,7 +31,7 @@ async def sync_knowledge_index(
     embedding_model: str,
     batch_size: int,
 ) -> int:
-    """Synchronise the on-disk KB with the repository's tables.
+    """Synchronize the on-disk KB with the repository's tables.
 
     Parameters
     ----------

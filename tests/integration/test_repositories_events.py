@@ -1,12 +1,20 @@
+"""Integration tests for EventsRepository against a real SQLite database.
+
+These tests exercise the repository through a real on-disk SQLite file
+(via ``tmp_path``) so that cursor ordering, chat-scoped lookups and
+latest-event retrieval are validated end-to-end, not against in-memory
+stubs.
+"""
+
 from pathlib import Path
 
 import pytest
 
+from app.common_types import ChatStatus, EventType
 from app.db.connection import build_connection_factory
 from app.db.init import initialize_database
 from app.repositories.chats import ChatsRepository
 from app.repositories.events import EventsRepository
-from app.types import ChatStatus, EventType
 
 
 @pytest.mark.anyio
