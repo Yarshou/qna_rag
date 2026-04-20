@@ -1,6 +1,7 @@
 .git
 .gitignore
 .codex/
+.claude/
 .idea
 .pytest_cache
 .ruff_cache

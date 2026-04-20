@@ -19,7 +19,6 @@ app/
 envs/             example.env (copy to .env)
 knowledge/        runtime plain-text KB files
 tests/            unit, integration, fixtures
-scripts/          helper scripts
 k8s/              Deployment, Service, PVC, HPA, Ingress/Secret templates
 docs/             architecture & production notes
 ```

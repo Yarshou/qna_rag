@@ -103,15 +103,19 @@ def cosine_scores(query_vec: list[float], doc_vecs: list[list[float]]) -> list[f
     if not doc_vecs or not query_vec:
         return [0.0] * len(doc_vecs)
 
-    q = np.asarray(query_vec, dtype=np.float32)
-    D = np.asarray(doc_vecs, dtype=np.float32)
-    q_norm = float(np.linalg.norm(q))
-    if q_norm == 0.0:
+    query = np.asarray(query_vec, dtype=np.float32)
+    doc_matrix = np.asarray(doc_vecs, dtype=np.float32)
+    query_norm = float(np.linalg.norm(query))
+    if query_norm == 0.0:
         return [0.0] * len(doc_vecs)
 
-    dots = D @ q
-    d_norms = np.linalg.norm(D, axis=1)
+    dot_products = doc_matrix @ query
+    doc_norms = np.linalg.norm(doc_matrix, axis=1)
     # Avoid division-by-zero for degenerate zero vectors.
     with np.errstate(divide="ignore", invalid="ignore"):
-        scores = np.where(d_norms > 0, dots / (d_norms * q_norm), 0.0)
+        scores = np.where(
+            doc_norms > 0,
+            dot_products / (doc_norms * query_norm),
+            0.0,
+        )
     return scores.astype(float).tolist()
