@@ -6,7 +6,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.v1 import events as events_api
-from app.shared_types import ChatStatus, EventType
 from app.config import settings
 from app.config.app import app
 from app.db.connection import build_connection_factory
@@ -14,6 +13,7 @@ from app.db.init import initialize_database
 from app.repositories.chats import ChatsRepository
 from app.repositories.events import EventsRepository
 from app.services.notification_service import NotificationService
+from app.shared_types import ChatStatus, EventType
 
 
 def _run(coroutine):

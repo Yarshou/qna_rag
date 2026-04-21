@@ -15,7 +15,6 @@ from typing import Any
 
 import pytest
 
-from app.shared_types import Chat, ChatStatus, EventType, Message, MessageRole
 from app.guardrails.exceptions import GuardrailViolationError
 from app.llm.exceptions import LLMProviderError
 from app.services.message_service import (
@@ -23,6 +22,7 @@ from app.services.message_service import (
     MessageProcessingError,
     MessageService,
 )
+from app.shared_types import Chat, ChatStatus, EventType, Message, MessageRole
 
 _NOW = datetime(2026, 4, 9, 10, 0, 0, tzinfo=UTC)
 

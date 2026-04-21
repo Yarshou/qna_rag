@@ -149,8 +149,6 @@ class KnowledgeRetriever:
         """Return the full content of a single file by its stable ID."""
         return self._loader.get_document(file_id)
 
-    # ── private helpers ──────────────────────────────────────────────────────
-
     def _embed_query(self, query: str) -> list[float] | None:
         if self._embeddings_client is None:
             return None

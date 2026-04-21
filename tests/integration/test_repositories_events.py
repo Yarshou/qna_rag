@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from app.shared_types import ChatStatus, EventType
 from app.db.connection import build_connection_factory
 from app.db.init import initialize_database
 from app.repositories.chats import ChatsRepository
 from app.repositories.events import EventsRepository
+from app.shared_types import ChatStatus, EventType
 
 
 @pytest.mark.anyio

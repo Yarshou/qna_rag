@@ -7,10 +7,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.shared_types import ChatEvent
 from app.schemas.common import ErrorResponse
 from app.schemas.events import EventListResponse, EventResponse
 from app.services import ChatService, NotificationService
+from app.shared_types import ChatEvent
 
 router = APIRouter(tags=["events"])
 logger = logging.getLogger(__name__)

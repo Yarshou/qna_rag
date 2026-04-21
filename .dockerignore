@@ -15,6 +15,7 @@ docs/
 k8s/
 Makefile
 AGENTS.md
+CLAUDE.md
 *.md
 !README.md
 .dockerignore

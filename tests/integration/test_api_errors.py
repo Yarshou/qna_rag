@@ -8,10 +8,10 @@ error branch.
 
 from fastapi.testclient import TestClient
 
-from app.shared_types import Chat
 from app.config.app import app
 from app.llm.exceptions import LLMClientConfigurationError, LLMProviderError
 from app.services import ChatNotFoundError, MessageProcessingError
+from app.shared_types import Chat
 from tests.integration.conftest import (
     FakeChatServiceBroken,
     FakeChatServiceMissing,

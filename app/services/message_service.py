@@ -5,7 +5,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from app.shared_types import Message, MessageRole
 from app.config import settings
 from app.guardrails import InputGuard, OutputGuard
 from app.knowledge import KnowledgeLoader, KnowledgeRetriever
@@ -21,6 +20,7 @@ from app.repositories.messages import MessagesRepository
 from app.services.chat_service import ChatService
 from app.services.context_service import ContextService
 from app.services.notification_service import NotificationService
+from app.shared_types import Message, MessageRole
 
 logger = logging.getLogger(__name__)
 

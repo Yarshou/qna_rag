@@ -12,11 +12,11 @@ from typing import Any
 
 import pytest
 
-from app.shared_types import Chat, ChatEvent, Message
-from app.shared_types.enums import ChatStatus, EventType, MessageRole
 from app.services.chat_service import ChatService
 from app.services.context_service import ContextService
 from app.services.notification_service import NotificationService
+from app.shared_types import Chat, ChatEvent, Message
+from app.shared_types.enums import ChatStatus, EventType, MessageRole
 
 _NOW = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
 

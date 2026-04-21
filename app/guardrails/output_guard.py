@@ -62,24 +62,22 @@ class OutputGuard:
         self._warn_if_ungrounded(content, tool_calls_executed)
         return content
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
-
     def _check_length(self, content: str) -> None:
         if len(content) > self._max_response_length:
             raise GuardrailViolationError(
                 f"Assistant response exceeds the maximum allowed length of {self._max_response_length} characters."
             )
 
-    def _check_leakage(self, content: str) -> None:
+    @staticmethod
+    def _check_leakage(content: str) -> None:
         for pattern in _LEAKAGE_PATTERNS:
             if pattern.search(content):
                 raise GuardrailViolationError(
                     "Assistant response contains internal system details that must not be disclosed."
                 )
 
-    def _warn_if_ungrounded(self, content: str, tool_calls_executed: int) -> None:
+    @staticmethod
+    def _warn_if_ungrounded(content: str, tool_calls_executed: int) -> None:
         """Log a warning when the model answered without any KB access.
 
         This is a monitoring signal, not a hard gate.  A warning here means

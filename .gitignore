@@ -91,3 +91,5 @@ cython_debug/
 .idea/
 .claude
 .codex
+AGENTS.md
+CLAUDE.md

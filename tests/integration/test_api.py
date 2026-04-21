@@ -8,9 +8,9 @@ exercised.
 
 from fastapi.testclient import TestClient
 
-from app.shared_types import Chat, ChatEvent, Message
 from app.config.app import app
 from app.services import MessageProcessingResult
+from app.shared_types import Chat, ChatEvent, Message
 from tests.integration.conftest import (
     FakeChatService,
     FakeMessageService,

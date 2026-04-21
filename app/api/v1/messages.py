@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
-from app.shared_types import Message
 from app.context import AppContext
 from app.guardrails import GuardrailViolationError
 from app.llm import (
@@ -15,6 +14,7 @@ from app.llm import (
 from app.schemas.common import ErrorResponse
 from app.schemas.messages import MessageListResponse, MessageResponse, PostMessageRequest, PostMessageResponse
 from app.services import ChatNotFoundError, MessageProcessingError, MessageService
+from app.shared_types import Message
 
 router = APIRouter(tags=["messages"])
 
