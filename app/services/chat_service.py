@@ -8,8 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 class ChatService:
-    """Application service for chat lifecycle operations."""
-
     def __init__(self, chats_repository: ChatsRepository | None = None) -> None:
         self._chats_repository = chats_repository or ChatsRepository()
 

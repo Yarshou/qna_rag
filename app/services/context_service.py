@@ -3,8 +3,6 @@ from app.shared_types import Message
 
 
 class ContextService:
-    """Loads persisted message history for chat-oriented workflows."""
-
     def __init__(self, messages_repository: MessagesRepository | None = None) -> None:
         self._messages_repository = messages_repository or MessagesRepository()
 

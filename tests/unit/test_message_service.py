@@ -245,7 +245,6 @@ async def test_post_user_message_without_tool_calls_returns_direct_answer() -> N
     assert result.assistant_message.content == "Direct answer."
     assert result.tool_calls_executed == 0
     assert result.used_knowledge_files == []
-    # user + assistant persisted
     assert [row["role"] for row in repo.rows] == [MessageRole.USER.value, MessageRole.ASSISTANT.value]
     assert llm.calls == 1
     assert tools.calls == []
@@ -272,7 +271,6 @@ async def test_post_user_message_single_tool_round_records_used_file() -> None:
 
     assert result.tool_calls_executed == 2
     assert result.used_knowledge_files == ["f-a"]
-    # assistant metadata is persisted on the DB row too
     assistant_row = next(r for r in repo.rows if r["role"] == MessageRole.ASSISTANT.value)
     assert assistant_row["metadata"]["used_knowledge_files"] == ["f-a"]
     assert assistant_row["metadata"]["tool_calls_executed"] == 2

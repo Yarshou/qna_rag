@@ -25,18 +25,14 @@ from app.shared_types import Message, MessageRole
 logger = logging.getLogger(__name__)
 
 
-class ChatNotFoundError(LookupError):
-    """Raised when a requested chat does not exist."""
+class ChatNotFoundError(LookupError): ...
 
 
-class MessageProcessingError(RuntimeError):
-    """Raised when message orchestration cannot produce an assistant response."""
+class MessageProcessingError(RuntimeError): ...
 
 
 @dataclass(slots=True)
 class MessageProcessingResult:
-    """Stable service result for one user-message processing flow."""
-
     chat_id: str
     user_message: Message
     assistant_message: Message
@@ -45,8 +41,6 @@ class MessageProcessingResult:
 
 
 class MessageService:
-    """Coordinates chat message persistence, tool-calling RAG, and lifecycle events."""
-
     def __init__(
         self,
         *,

@@ -23,7 +23,7 @@ Supported providers (configure ONE via environment variables or app/envs/.env):
         OPENAI_API_KEY=ollama
         OPENAI_MODEL=llama3
 
-The test knowledge base lives under tests/fixtures/knowledge.
+The test knowledge base lives under tests/test_data/knowledge.
 """
 
 from pathlib import Path
@@ -49,7 +49,7 @@ pytestmark = [
     ),
 ]
 
-_FIXTURES_KNOWLEDGE_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "knowledge"
+_FIXTURES_KNOWLEDGE_DIR = Path(__file__).resolve().parent.parent / "test_data" / "knowledge"
 
 
 @pytest.fixture
@@ -123,7 +123,7 @@ async def _build_services(db_path: Path):
 @pytest.mark.anyio
 async def test_rag_answers_question_grounded_in_knowledge_base(rag_db_path: Path) -> None:
     """The assistant must produce a non-empty response that uses at least one
-    knowledge-base tool call when asked a question covered by the fixtures.
+    knowledge-base tool call when asked a question covered by the test_data.
 
     The fixture knowledge base contains 'deployment_notes.md' which mentions
     'readiness checks', so a query about deployment should trigger a retrieval

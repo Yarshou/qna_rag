@@ -104,7 +104,6 @@ async def test_sync_index_removes_orphaned_rows(tmp_path: Path) -> None:
     count = await sync_knowledge_index(loader, stub, repo, "stub-model", 16)
 
     assert count == 1
-    # Repository no longer contains the orphaned row.
     ids = await repo.list_file_ids()
     assert len(ids) == 1
 

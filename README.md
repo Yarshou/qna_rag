@@ -20,15 +20,14 @@ envs/             example.env (copy to .env)
 knowledge/        runtime plain-text KB files
 tests/            unit, integration, fixtures
 k8s/              Deployment, Service, PVC, HPA, Ingress/Secret templates
-docs/             architecture & production notes
 ```
 
 ## Quick Start
 
 ```bash
 poetry install --with dev
-cp app/envs/example.env envs/.env   # fill in LLM credentials
-make run                                 # or: poetry run uvicorn app.config.app:app --host 0.0.0.0 --port 8000
+cp envs/example.env envs/.env   # fill in LLM credentials
+make run
 ```
 
 Health check:
@@ -61,7 +60,25 @@ make docker-run     # run container with envs/.env
 
 Integration tests in `tests/integration/test_rag.py` require real LLM credentials and are auto-skipped otherwise.
 
-## Documentation
+## RAG Design
 
-- [Architecture](docs/architecture.md)
-- [Production notes](docs/production.md)
+The model accesses the knowledge base exclusively through two tools:
+
+- `search_knowledge_base(query)` — returns ranked candidates with snippets
+- `read_knowledge_file(file_id)` — returns full content of a selected file
+
+`ToolExecutor` enforces the sequence in code: `read_knowledge_file` is only allowed for `file_id` values returned by the most recent search, and at most 2 full-file reads are permitted per message flow.
+
+### Retrieval pipeline
+
+Hybrid search (BM25 + cosine) is used when an embeddings provider is configured. Mode is selected automatically:
+
+| Store capabilities | Mode |
+|---|---|
+| No corpus stats, no embeddings | Additive lexical (fallback) |
+| Corpus stats, no embeddings | BM25-only |
+| Corpus stats + embeddings | Hybrid (BM25 + cosine) |
+
+Fusion: min-max normalise each signal, then `score = α × lex + (1 − α) × sem` where `α = HYBRID_LEXICAL_WEIGHT` (default `0.5`).
+
+Embeddings are cached in SQLite by `(file_id, checksum, model)` — unchanged files are never re-embedded. If the embeddings API is unavailable at startup, the indexer falls back to BM25-only with an error log.

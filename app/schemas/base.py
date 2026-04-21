@@ -11,14 +11,6 @@ from pydantic import BaseModel, ConfigDict
 
 
 class BaseSchema(BaseModel):
-    """Pydantic base model with shared configuration for all API schemas.
-
-    Configuration
-    -------------
-    extra = "forbid"
-        Unknown fields in incoming payloads raise a ``ValidationError``
-        rather than being silently ignored.  This enforces strict API
-        contracts on both requests and responses.
-    """
+    """Pydantic base model with shared configuration for all API schemas."""
 
     model_config = ConfigDict(extra="forbid")

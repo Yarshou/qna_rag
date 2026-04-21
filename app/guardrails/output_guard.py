@@ -36,7 +36,7 @@ class OutputGuard:
     * Any code-based grounding check requires a growing list of exceptions
       that can never be complete.
 
-    Enforcement of grounding *behaviour* belongs in the system prompt, not
+    Enforcement of grounding *behavior* belongs in the system prompt, not
     in a post-hoc filter.  The output guard's job is limited to things that
     can be measured structurally and with near-zero false-positive rate:
 
@@ -78,12 +78,6 @@ class OutputGuard:
 
     @staticmethod
     def _warn_if_ungrounded(content: str, tool_calls_executed: int) -> None:
-        """Log a warning when the model answered without any KB access.
-
-        This is a monitoring signal, not a hard gate.  A warning here means
-        "investigate whether the system prompt is doing its job" — it does
-        not mean the response is wrong.
-        """
         if tool_calls_executed > 0:
             return
 

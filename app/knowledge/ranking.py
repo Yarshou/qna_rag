@@ -21,7 +21,6 @@ from app.knowledge.models import KnowledgeDocument
 TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 WHITESPACE_PATTERN = re.compile(r"\s+")
 
-# Target character window for the snippet shown to the model.
 SNIPPET_LENGTH = 180
 _SNIPPET_LOOKBACK = 60
 _SNIPPET_LOOKAHEAD = 100

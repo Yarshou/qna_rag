@@ -23,22 +23,18 @@ from app.shared_types.utils import JsonMap, optional_json_map, parse_datetime
 
 @dataclass(slots=True)
 class Chat:
-    """Internal chat entity shared across repository and service boundaries."""
-
     id: str
     created_at: datetime
     title: str | None
     status: ChatStatus
 
     def __post_init__(self) -> None:
-        """Coerce incoming values into the shared_types's timestamp and enum shared_types."""
 
         self.created_at = parse_datetime(self.created_at)
         self.status = ChatStatus(self.status)
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "Chat":
-        """Build a chat from a repository-style mapping."""
 
         return cls(
             id=str(data["id"]),
@@ -48,7 +44,6 @@ class Chat:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize the chat into a plain mapping with stable string values."""
 
         return {
             "id": self.id,
@@ -60,8 +55,6 @@ class Chat:
 
 @dataclass(slots=True)
 class Message:
-    """Internal message entity for persisted chat messages."""
-
     id: str
     chat_id: str
     role: MessageRole
@@ -70,7 +63,6 @@ class Message:
     metadata: JsonMap | None = None
 
     def __post_init__(self) -> None:
-        """Coerce incoming values into the shared_types's timestamp and enum shared_types."""
 
         self.role = MessageRole(self.role)
         self.created_at = parse_datetime(self.created_at)
@@ -78,7 +70,6 @@ class Message:
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "Message":
-        """Build a message from a repository-style mapping."""
 
         return cls(
             id=str(data["id"]),
@@ -90,7 +81,6 @@ class Message:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize the message into a plain mapping with stable string values."""
 
         return {
             "id": self.id,
@@ -104,8 +94,6 @@ class Message:
 
 @dataclass(slots=True)
 class ChatEvent:
-    """Internal event entity representing message-processing milestones."""
-
     id: str
     chat_id: str
     event_type: EventType
@@ -113,7 +101,6 @@ class ChatEvent:
     created_at: datetime
 
     def __post_init__(self) -> None:
-        """Coerce incoming values into the shared_types's timestamp and enum shared_types."""
 
         self.event_type = EventType(self.event_type)
         self.created_at = parse_datetime(self.created_at)
@@ -121,7 +108,6 @@ class ChatEvent:
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "ChatEvent":
-        """Build an event from a repository-style mapping."""
 
         return cls(
             id=str(data["id"]),
@@ -132,7 +118,6 @@ class ChatEvent:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize the event into a plain mapping with stable string values."""
 
         return {
             "id": self.id,
@@ -145,8 +130,6 @@ class ChatEvent:
 
 @dataclass(slots=True)
 class KnowledgeFileRef:
-    """Reference metadata for a knowledge-base file selected by retrieval."""
-
     id: str
     filename: str
     path: str
@@ -154,14 +137,12 @@ class KnowledgeFileRef:
     updated_at: datetime | None = None
 
     def __post_init__(self) -> None:
-        """Normalize the optional file timestamp when present."""
 
         if self.updated_at is not None:
             self.updated_at = parse_datetime(self.updated_at)
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "KnowledgeFileRef":
-        """Build a knowledge file reference from a plain mapping."""
 
         return cls(
             id=str(data["id"]),
@@ -172,7 +153,6 @@ class KnowledgeFileRef:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize the knowledge file reference into a plain mapping."""
 
         return {
             "id": self.id,

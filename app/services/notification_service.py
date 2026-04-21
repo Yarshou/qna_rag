@@ -10,8 +10,6 @@ EventPayload = Mapping[str, object] | None
 
 
 class NotificationService:
-    """Persists chat-processing lifecycle events and reads them for REST/SSE delivery."""
-
     def __init__(
         self,
         events_repository: EventsRepository | None = None,

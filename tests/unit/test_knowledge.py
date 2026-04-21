@@ -9,7 +9,7 @@ from app.knowledge import KnowledgeLoader
 
 @pytest.fixture
 def knowledge_dir() -> Path:
-    return Path(__file__).resolve().parent.parent / "fixtures" / "knowledge"
+    return Path(__file__).resolve().parent.parent / "test_data" / "knowledge"
 
 
 def test_loader_lists_only_supported_documents(knowledge_dir: Path) -> None:

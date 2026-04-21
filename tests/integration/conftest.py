@@ -1,8 +1,8 @@
-"""Shared fixtures and fake service classes for API integration tests.
+"""Shared test_data and fake service classes for API integration tests.
 
 The API integration suite exercises the full FastAPI stack through
 ``TestClient`` while substituting business-logic services with hand-rolled
-fakes.  This module centralises those fakes and their fixtures so that
+fakes.  This module centralises those fakes and their test_data so that
 ``test_api.py`` and ``test_api_errors.py`` share one source of truth.
 """
 

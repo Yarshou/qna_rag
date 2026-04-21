@@ -1,4 +1,4 @@
-"""Shared pytest configuration and fixtures for the QnA RAG test suite."""
+"""Shared pytest configuration and test_data for the QnA RAG test suite."""
 
 import os
 from pathlib import Path
