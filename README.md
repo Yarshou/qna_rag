@@ -71,14 +71,13 @@ The model accesses the knowledge base exclusively through two tools:
 
 ### Retrieval pipeline
 
-Hybrid search (BM25 + cosine) is used when an embeddings provider is configured. Mode is selected automatically:
+Hybrid search (SQLite FTS5 BM25 + cosine) is used when an embeddings provider is configured. Mode is selected automatically:
 
 | Store capabilities | Mode |
 |---|---|
-| No corpus stats, no embeddings | Additive lexical (fallback) |
-| Corpus stats, no embeddings | BM25-only |
-| Corpus stats + embeddings | Hybrid (BM25 + cosine) |
+| FTS5 index, no embeddings | BM25-only |
+| FTS5 index + embeddings | Hybrid (BM25 + cosine) |
 
-Fusion: min-max normalise each signal, then `score = α × lex + (1 − α) × sem` where `α = HYBRID_LEXICAL_WEIGHT` (default `0.5`).
+Fusion: min-max normalize each signal, then `score = α × lex + (1 − α) × sem` where `α = HYBRID_LEXICAL_WEIGHT` (default `0.5`).
 
 Embeddings are cached in SQLite by `(file_id, checksum, model)` — unchanged files are never re-embedded. If the embeddings API is unavailable at startup, the indexer falls back to BM25-only with an error log.
